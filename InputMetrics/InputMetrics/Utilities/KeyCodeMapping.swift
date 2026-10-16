@@ -1,87 +1,54 @@
 import Foundation
 import Carbon.HIToolbox
 
-enum KeyboardLayout: String {
-    case qwertz, qwerty, azerty, unknown
-}
-
 struct KeyCodeMapping {
-    static func detectCurrentLayout() -> KeyboardLayout {
-        guard let source = TISCopyCurrentKeyboardInputSource()?.takeRetainedValue(),
-              let layoutIDPtr = TISGetInputSourceProperty(source, kTISPropertyInputSourceID),
-              let layoutID = Unmanaged<CFString>.fromOpaque(layoutIDPtr).takeUnretainedValue() as String?
-        else {
-            return .qwertz
-        }
+    private static let printableKeyCodes: Set<Int> = [
+        kVK_ANSI_Grave, kVK_ANSI_1, kVK_ANSI_2, kVK_ANSI_3, kVK_ANSI_4, kVK_ANSI_5, kVK_ANSI_6,
+        kVK_ANSI_7, kVK_ANSI_8, kVK_ANSI_9, kVK_ANSI_0, kVK_ANSI_Minus, kVK_ANSI_Equal,
+        kVK_ANSI_Q, kVK_ANSI_W, kVK_ANSI_E, kVK_ANSI_R, kVK_ANSI_T, kVK_ANSI_Y, kVK_ANSI_U,
+        kVK_ANSI_I, kVK_ANSI_O, kVK_ANSI_P, kVK_ANSI_LeftBracket, kVK_ANSI_RightBracket,
+        kVK_ANSI_A, kVK_ANSI_S, kVK_ANSI_D, kVK_ANSI_F, kVK_ANSI_G, kVK_ANSI_H, kVK_ANSI_J,
+        kVK_ANSI_K, kVK_ANSI_L, kVK_ANSI_Semicolon, kVK_ANSI_Quote, kVK_ANSI_Backslash,
+        kVK_ANSI_Z, kVK_ANSI_X, kVK_ANSI_C, kVK_ANSI_V, kVK_ANSI_B, kVK_ANSI_N, kVK_ANSI_M,
+        kVK_ANSI_Comma, kVK_ANSI_Period, kVK_ANSI_Slash,
+    ]
 
-        let id = layoutID.lowercased()
-        if id.contains("azerty") || id.contains("french") {
-            return .azerty
-        } else if id.contains("qwertz") || id.contains("german") || id.contains("swiss") {
-            return .qwertz
-        } else {
-            return .qwerty
+    /// Label for a physical key under the active keyboard layout.
+    private static func layoutLabel(for keyCode: Int) -> String? {
+        guard let source = TISCopyCurrentKeyboardLayoutInputSource()?.takeRetainedValue(),
+              let dataPtr = TISGetInputSourceProperty(source, kTISPropertyUnicodeKeyLayoutData)
+        else { return nil }
+
+        let layoutData = Unmanaged<CFData>.fromOpaque(dataPtr).takeUnretainedValue()
+        guard let bytes = CFDataGetBytePtr(layoutData) else { return nil }
+
+        var deadKeyState: UInt32 = 0
+        var length = 0
+        var chars = [UniChar](repeating: 0, count: 4)
+        let status = bytes.withMemoryRebound(to: UCKeyboardLayout.self, capacity: 1) { layout in
+            UCKeyTranslate(
+                layout,
+                UInt16(keyCode),
+                UInt16(kUCKeyActionDisplay),
+                0,
+                UInt32(LMGetKbdType()),
+                OptionBits(kUCKeyTranslateNoDeadKeysBit),
+                &deadKeyState,
+                chars.count,
+                &length,
+                &chars
+            )
         }
+        guard status == noErr, length > 0 else { return nil }
+        return String(utf16CodeUnits: chars, count: length).uppercased()
     }
 
     static func keyName(for keyCode: Int) -> String {
-        // QWERTZ keyboard layout mapping
+        if printableKeyCodes.contains(keyCode), let label = layoutLabel(for: keyCode) {
+            return label
+        }
+
         switch keyCode {
-        // Number row
-        case kVK_ANSI_Grave: return "^"
-        case kVK_ANSI_1: return "1"
-        case kVK_ANSI_2: return "2"
-        case kVK_ANSI_3: return "3"
-        case kVK_ANSI_4: return "4"
-        case kVK_ANSI_5: return "5"
-        case kVK_ANSI_6: return "6"
-        case kVK_ANSI_7: return "7"
-        case kVK_ANSI_8: return "8"
-        case kVK_ANSI_9: return "9"
-        case kVK_ANSI_0: return "0"
-        case kVK_ANSI_Minus: return "ß"
-        case kVK_ANSI_Equal: return "´"
-
-        // Top letter row (QWERTZ)
-        case kVK_ANSI_Q: return "Q"
-        case kVK_ANSI_W: return "W"
-        case kVK_ANSI_E: return "E"
-        case kVK_ANSI_R: return "R"
-        case kVK_ANSI_T: return "T"
-        case kVK_ANSI_Y: return "Z" // QWERTZ swap
-        case kVK_ANSI_U: return "U"
-        case kVK_ANSI_I: return "I"
-        case kVK_ANSI_O: return "O"
-        case kVK_ANSI_P: return "P"
-        case kVK_ANSI_LeftBracket: return "Ü"
-        case kVK_ANSI_RightBracket: return "+"
-
-        // Middle letter row
-        case kVK_ANSI_A: return "A"
-        case kVK_ANSI_S: return "S"
-        case kVK_ANSI_D: return "D"
-        case kVK_ANSI_F: return "F"
-        case kVK_ANSI_G: return "G"
-        case kVK_ANSI_H: return "H"
-        case kVK_ANSI_J: return "J"
-        case kVK_ANSI_K: return "K"
-        case kVK_ANSI_L: return "L"
-        case kVK_ANSI_Semicolon: return "Ö"
-        case kVK_ANSI_Quote: return "Ä"
-        case kVK_ANSI_Backslash: return "'"
-
-        // Bottom letter row (QWERTZ)
-        case kVK_ANSI_Z: return "Y" // QWERTZ swap
-        case kVK_ANSI_X: return "X"
-        case kVK_ANSI_C: return "C"
-        case kVK_ANSI_V: return "V"
-        case kVK_ANSI_B: return "B"
-        case kVK_ANSI_N: return "N"
-        case kVK_ANSI_M: return "M"
-        case kVK_ANSI_Comma: return ","
-        case kVK_ANSI_Period: return "."
-        case kVK_ANSI_Slash: return "-"
-
         // Special keys
         case kVK_Space: return "Space"
         case kVK_Return: return "↵"
@@ -126,11 +93,24 @@ struct KeyCodeMapping {
         }
     }
 
-    static let qwertzLayout: [[String]] = [
-        ["^", "1", "2", "3", "4", "5", "6", "7", "8", "9", "0", "ß", "´", "⌫"],
-        ["⇥", "Q", "W", "E", "R", "T", "Z", "U", "I", "O", "P", "Ü", "+", ""],
-        ["⇪", "A", "S", "D", "F", "G", "H", "J", "K", "L", "Ö", "Ä", "'", "↵"],
-        ["⇧", "<", "Y", "X", "C", "V", "B", "N", "M", ",", ".", "-", "⇧", ""],
-        ["fn", "⌃", "⌥", "⌘", "        Space        ", "⌘", "⌥", "←", "↑↓", "→"]
+    typealias KeyboardKey = (keyCode: Int, width: CGFloat)
+
+    /// ANSI keyboard rows; widths are in key units (1 = standard key).
+    static let ansiRows: [[KeyboardKey]] = [
+        [(kVK_ANSI_Grave, 1), (kVK_ANSI_1, 1), (kVK_ANSI_2, 1), (kVK_ANSI_3, 1), (kVK_ANSI_4, 1),
+         (kVK_ANSI_5, 1), (kVK_ANSI_6, 1), (kVK_ANSI_7, 1), (kVK_ANSI_8, 1), (kVK_ANSI_9, 1),
+         (kVK_ANSI_0, 1), (kVK_ANSI_Minus, 1), (kVK_ANSI_Equal, 1), (kVK_Delete, 2)],
+        [(kVK_Tab, 1.5), (kVK_ANSI_Q, 1), (kVK_ANSI_W, 1), (kVK_ANSI_E, 1), (kVK_ANSI_R, 1),
+         (kVK_ANSI_T, 1), (kVK_ANSI_Y, 1), (kVK_ANSI_U, 1), (kVK_ANSI_I, 1), (kVK_ANSI_O, 1),
+         (kVK_ANSI_P, 1), (kVK_ANSI_LeftBracket, 1), (kVK_ANSI_RightBracket, 1), (kVK_ANSI_Backslash, 1.5)],
+        [(kVK_CapsLock, 1.75), (kVK_ANSI_A, 1), (kVK_ANSI_S, 1), (kVK_ANSI_D, 1), (kVK_ANSI_F, 1),
+         (kVK_ANSI_G, 1), (kVK_ANSI_H, 1), (kVK_ANSI_J, 1), (kVK_ANSI_K, 1), (kVK_ANSI_L, 1),
+         (kVK_ANSI_Semicolon, 1), (kVK_ANSI_Quote, 1), (kVK_Return, 2.25)],
+        [(kVK_Shift, 2.25), (kVK_ANSI_Z, 1), (kVK_ANSI_X, 1), (kVK_ANSI_C, 1), (kVK_ANSI_V, 1),
+         (kVK_ANSI_B, 1), (kVK_ANSI_N, 1), (kVK_ANSI_M, 1), (kVK_ANSI_Comma, 1), (kVK_ANSI_Period, 1),
+         (kVK_ANSI_Slash, 1), (kVK_RightShift, 2.75)],
+        [(kVK_Function, 1), (kVK_Control, 1), (kVK_Option, 1), (kVK_Command, 1.25), (kVK_Space, 5.5),
+         (kVK_RightCommand, 1.25), (kVK_RightOption, 1), (kVK_LeftArrow, 0.75), (kVK_UpArrow, 0.75),
+         (kVK_DownArrow, 0.75), (kVK_RightArrow, 0.75)],
     ]
 }

@@ -19,19 +19,7 @@ final class KeyCodeMappingTests: XCTestCase {
         XCTAssertEqual(KeyCodeMapping.keyName(for: kVK_ANSI_0), "0")
     }
 
-    func testGraveKey() {
-        XCTAssertEqual(KeyCodeMapping.keyName(for: kVK_ANSI_Grave), "^")
-    }
-
-    func testMinusKey() {
-        XCTAssertEqual(KeyCodeMapping.keyName(for: kVK_ANSI_Minus), "\u{00DF}") // ß
-    }
-
-    func testEqualKey() {
-        XCTAssertEqual(KeyCodeMapping.keyName(for: kVK_ANSI_Equal), "\u{00B4}") // ´
-    }
-
-    // MARK: - QWERTZ letter keys
+    // MARK: - Letter keys (layout-dependent; assumes a Latin layout)
 
     func testTopRowLetters() {
         XCTAssertEqual(KeyCodeMapping.keyName(for: kVK_ANSI_Q), "Q")
@@ -43,13 +31,6 @@ final class KeyCodeMappingTests: XCTestCase {
         XCTAssertEqual(KeyCodeMapping.keyName(for: kVK_ANSI_I), "I")
         XCTAssertEqual(KeyCodeMapping.keyName(for: kVK_ANSI_O), "O")
         XCTAssertEqual(KeyCodeMapping.keyName(for: kVK_ANSI_P), "P")
-    }
-
-    func testQwertzYZSwap() {
-        // kVK_ANSI_Y (physical Y position) maps to "Z" in QWERTZ
-        XCTAssertEqual(KeyCodeMapping.keyName(for: kVK_ANSI_Y), "Z")
-        // kVK_ANSI_Z (physical Z position) maps to "Y" in QWERTZ
-        XCTAssertEqual(KeyCodeMapping.keyName(for: kVK_ANSI_Z), "Y")
     }
 
     func testMiddleRowLetters() {
@@ -64,12 +45,6 @@ final class KeyCodeMappingTests: XCTestCase {
         XCTAssertEqual(KeyCodeMapping.keyName(for: kVK_ANSI_L), "L")
     }
 
-    func testGermanUmlauts() {
-        XCTAssertEqual(KeyCodeMapping.keyName(for: kVK_ANSI_LeftBracket), "\u{00DC}") // Ü
-        XCTAssertEqual(KeyCodeMapping.keyName(for: kVK_ANSI_Semicolon), "\u{00D6}") // Ö
-        XCTAssertEqual(KeyCodeMapping.keyName(for: kVK_ANSI_Quote), "\u{00C4}") // Ä
-    }
-
     func testBottomRowLetters() {
         XCTAssertEqual(KeyCodeMapping.keyName(for: kVK_ANSI_X), "X")
         XCTAssertEqual(KeyCodeMapping.keyName(for: kVK_ANSI_C), "C")
@@ -77,14 +52,6 @@ final class KeyCodeMappingTests: XCTestCase {
         XCTAssertEqual(KeyCodeMapping.keyName(for: kVK_ANSI_B), "B")
         XCTAssertEqual(KeyCodeMapping.keyName(for: kVK_ANSI_N), "N")
         XCTAssertEqual(KeyCodeMapping.keyName(for: kVK_ANSI_M), "M")
-    }
-
-    func testPunctuationKeys() {
-        XCTAssertEqual(KeyCodeMapping.keyName(for: kVK_ANSI_Comma), ",")
-        XCTAssertEqual(KeyCodeMapping.keyName(for: kVK_ANSI_Period), ".")
-        XCTAssertEqual(KeyCodeMapping.keyName(for: kVK_ANSI_Slash), "-")
-        XCTAssertEqual(KeyCodeMapping.keyName(for: kVK_ANSI_RightBracket), "+")
-        XCTAssertEqual(KeyCodeMapping.keyName(for: kVK_ANSI_Backslash), "'")
     }
 
     // MARK: - Special keys
@@ -169,23 +136,22 @@ final class KeyCodeMappingTests: XCTestCase {
         XCTAssertTrue(result.hasPrefix("Key"))
     }
 
-    // MARK: - QWERTZ layout structure
+    // MARK: - ANSI layout structure
 
-    func testQwertzLayoutHasFiveRows() {
-        XCTAssertEqual(KeyCodeMapping.qwertzLayout.count, 5)
+    func testAnsiLayoutHasFiveRows() {
+        XCTAssertEqual(KeyCodeMapping.ansiRows.count, 5)
     }
 
-    func testQwertzLayoutFirstRowStartsWithCaret() {
-        XCTAssertEqual(KeyCodeMapping.qwertzLayout[0].first, "^")
+    func testAnsiLayoutFirstRowEndsWithDelete() {
+        XCTAssertEqual(KeyCodeMapping.ansiRows[0].last?.keyCode, kVK_Delete)
     }
 
-    func testQwertzLayoutFirstRowEndsWithBackspace() {
-        XCTAssertEqual(KeyCodeMapping.qwertzLayout[0].last, "\u{232B}") // ⌫
+    func testAnsiLayoutContainsSpaceBar() {
+        XCTAssertTrue(KeyCodeMapping.ansiRows[4].contains { $0.keyCode == kVK_Space })
     }
 
-    func testQwertzLayoutContainsSpaceBar() {
-        let bottomRow = KeyCodeMapping.qwertzLayout[4]
-        let hasSpace = bottomRow.contains { $0.contains("Space") }
-        XCTAssertTrue(hasSpace)
+    func testAnsiLayoutKeyCodesAreUnique() {
+        let codes = KeyCodeMapping.ansiRows.flatMap { $0.map(\.keyCode) }
+        XCTAssertEqual(codes.count, Set(codes).count)
     }
 }

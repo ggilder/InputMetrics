@@ -1,17 +1,15 @@
 import SwiftUI
+import Carbon.HIToolbox
 
 struct KeyboardHeatmapView: View {
     let entries: [KeyboardEntry]
 
-    private var displayLayout: [[String]] {
-        KeyCodeMapping.qwertzLayout
-    }
-
-    private var keyCountMap: [String: Int] {
-        var map: [String: Int] = [:]
+    private var keyCountMap: [Int: Int] {
+        var map: [Int: Int] = [:]
         for entry in entries {
-            let keyName = KeyCodeMapping.keyName(for: entry.keyCode)
-            map[keyName, default: 0] += entry.count
+            // Mac keyboards have no right Control; a remapped Caps Lock reports as one
+            let keyCode = entry.keyCode == kVK_RightControl ? kVK_Control : entry.keyCode
+            map[keyCode, default: 0] += entry.count
         }
         return map
     }
@@ -22,17 +20,16 @@ struct KeyboardHeatmapView: View {
 
     var body: some View {
         VStack(spacing: 4) {
-            ForEach(0..<displayLayout.count, id: \.self) { rowIndex in
+            ForEach(0..<KeyCodeMapping.ansiRows.count, id: \.self) { rowIndex in
                 HStack(spacing: 2) {
-                    ForEach(0..<displayLayout[rowIndex].count, id: \.self) { colIndex in
-                        let key = displayLayout[rowIndex][colIndex]
-                        if !key.isEmpty {
-                            KeyView(
-                                label: key,
-                                count: keyCountMap[key] ?? 0,
-                                maxCount: maxCount
-                            )
-                        }
+                    ForEach(0..<KeyCodeMapping.ansiRows[rowIndex].count, id: \.self) { colIndex in
+                        let key = KeyCodeMapping.ansiRows[rowIndex][colIndex]
+                        KeyView(
+                            label: KeyCodeMapping.keyName(for: key.keyCode),
+                            count: keyCountMap[key.keyCode] ?? 0,
+                            maxCount: maxCount,
+                            width: key.width
+                        )
                     }
                 }
             }
@@ -47,6 +44,7 @@ struct KeyView: View {
     let label: String
     let count: Int
     let maxCount: Int
+    let width: CGFloat
 
     private var intensity: Double {
         guard maxCount > 0 else { return 0 }
@@ -92,15 +90,7 @@ struct KeyView: View {
     }
 
     private var keyWidth: CGFloat {
-        // Special widths for certain keys
-        if label.contains("Space") {
-            return 200
-        } else if label == "⌫" || label == "↵" {
-            return 60
-        } else if label == "⇥" || label == "⇪" {
-            return 50
-        }
-        return 40
+        40 * width + 2 * (width.rounded(.down) - 1)
     }
 }
 

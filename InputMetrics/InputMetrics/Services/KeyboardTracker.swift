@@ -49,6 +49,10 @@ class KeyboardTracker {
         heatmapBuffer[key, default: 0] += 1
     }
 
+    func trackModifierPress(keyCode: Int) {
+        heatmapBuffer[HeatmapKey(keyCode: keyCode, modifierFlags: 0), default: 0] += 1
+    }
+
     func getSpeedStats() -> (peakWPM: Double, avgWPM: Double) {
         let avgWPM: Double
         if keystrokeTimestamps.count >= 2,

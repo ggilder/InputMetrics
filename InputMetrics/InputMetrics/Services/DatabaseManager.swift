@@ -1,6 +1,5 @@
 import Foundation
 import GRDB
-import WidgetKit
 import os
 
 final class DatabaseManager: @unchecked Sendable {
@@ -9,7 +8,6 @@ final class DatabaseManager: @unchecked Sendable {
     private var dbQueue: DatabaseQueue?
     private let dbQueue_serial = DispatchQueue(label: "com.inputmetrics.database", qos: .userInitiated)
     private(set) var initializationError: String?
-    private var lastWidgetReload: Date = .distantPast
 
     var isReady: Bool { dbQueue != nil }
 
@@ -21,16 +19,8 @@ final class DatabaseManager: @unchecked Sendable {
         do {
             let fileManager = FileManager.default
 
-            guard let containerURL = fileManager.containerURL(
-                forSecurityApplicationGroupIdentifier: WidgetDataProvider.appGroupID
-            ) else {
-                initializationError = "Failed to access App Group container"
-                AppLogger.database.error("Failed to access App Group container")
-                return
-            }
-
+            let containerURL = WidgetDataProvider.storageDirectory
             try fileManager.createDirectory(at: containerURL, withIntermediateDirectories: true)
-            migrateOldDatabaseIfNeeded(to: containerURL)
 
             let dbPath = containerURL.appendingPathComponent("metrics.db").path
             AppLogger.database.info("Database path: \(dbPath)")
@@ -43,40 +33,6 @@ final class DatabaseManager: @unchecked Sendable {
             initializationError = "Database setup failed: \(error.localizedDescription)"
             AppLogger.database.error("Setup failed: \(error.localizedDescription)")
         }
-    }
-
-    private func migrateOldDatabaseIfNeeded(to containerURL: URL) {
-        let fileManager = FileManager.default
-        let newPath = containerURL.appendingPathComponent("metrics.db")
-
-        guard !fileManager.fileExists(atPath: newPath.path) else { return }
-
-        guard let appSupport = try? fileManager.url(
-            for: .applicationSupportDirectory,
-            in: .userDomainMask,
-            appropriateFor: nil,
-            create: false
-        ) else { return }
-
-        let oldPath = appSupport
-            .appendingPathComponent("InputMetrics", isDirectory: true)
-            .appendingPathComponent("metrics.db")
-
-        guard fileManager.fileExists(atPath: oldPath.path) else { return }
-
-        do {
-            try fileManager.copyItem(at: oldPath, to: newPath)
-            AppLogger.database.info("Migrated database from Application Support to App Group container")
-        } catch {
-            AppLogger.database.error("Database migration failed: \(error.localizedDescription)")
-        }
-    }
-
-    private func reloadWidgetTimelines() {
-        let now = Date()
-        guard now.timeIntervalSince(lastWidgetReload) >= 60 else { return }
-        lastWidgetReload = now
-        WidgetCenter.shared.reloadTimelines(ofKind: "InputMetricsWidget")
     }
 
     private var migrator: DatabaseMigrator {
@@ -247,7 +203,6 @@ final class DatabaseManager: @unchecked Sendable {
                         arguments: [date, mouseDistance, leftClicks, rightClicks, middleClicks, keystrokes, scrollVertical, scrollHorizontal, firstActiveAt, lastActiveAt, activeMinutes, avgMouseSpeed, peakMouseSpeed, peakWPM]
                     )
                 }
-                self.reloadWidgetTimelines()
             } catch {
                 AppLogger.database.error("Update daily summary failed: \(error.localizedDescription)")
             }

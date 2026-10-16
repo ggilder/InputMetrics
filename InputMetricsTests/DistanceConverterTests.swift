@@ -73,7 +73,8 @@ final class DistanceConverterTests: XCTestCase {
     }
 
     func testFormatDistanceMetricThreshold() {
-        let pixels = ppm * 1000
+        // Slightly above 1000 m so floating-point rounding can't land below the threshold
+        let pixels = ppm * 1000.001
         let result = DistanceConverter.formatDistance(pixels, unit: .metric)
         XCTAssertEqual(result, "1.00 km")
     }

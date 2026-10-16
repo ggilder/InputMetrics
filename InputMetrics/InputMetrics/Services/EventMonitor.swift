@@ -1,5 +1,6 @@
 @preconcurrency import Cocoa
 import CoreGraphics
+import Carbon.HIToolbox
 import os
 
 @MainActor
@@ -51,6 +52,7 @@ class EventMonitor {
     func start() {
         startAppTracking()
         startSleepWakeObservers()
+        if !CGPreflightListenEventAccess() { CGRequestListenEventAccess() }
         if createAndStartEventTap() { return }
 
         AppLogger.events.warning("Event tap creation failed -- accessibility permission likely not granted")
@@ -96,6 +98,7 @@ class EventMonitor {
                        (1 << CGEventType.rightMouseDown.rawValue) |
                        (1 << CGEventType.otherMouseDown.rawValue) |
                        (1 << CGEventType.keyDown.rawValue) |
+                       (1 << CGEventType.flagsChanged.rawValue) |
                        (1 << CGEventType.scrollWheel.rawValue)
 
         guard let tap = CGEvent.tapCreate(
@@ -214,6 +217,18 @@ class EventMonitor {
         return seconds
     }
 
+    nonisolated private static func isModifierPress(keyCode: Int, flags: CGEventFlags) -> Bool {
+        switch keyCode {
+        case kVK_Shift, kVK_RightShift: return flags.contains(.maskShift)
+        case kVK_Control, kVK_RightControl: return flags.contains(.maskControl)
+        case kVK_Option, kVK_RightOption: return flags.contains(.maskAlternate)
+        case kVK_Command, kVK_RightCommand: return flags.contains(.maskCommand)
+        case kVK_Function: return flags.contains(.maskSecondaryFn)
+        case kVK_CapsLock: return true
+        default: return false
+        }
+    }
+
     nonisolated private func handleEvent(type: CGEventType, event: CGEvent) {
         let location = event.location
         let keyCode = Int(event.getIntegerValueField(.keyboardEventKeycode))
@@ -261,6 +276,12 @@ class EventMonitor {
             case .keyDown:
                 keyboardEventCount += 1
                 KeyboardTracker.shared.trackKeystroke(keyCode: keyCode, modifierFlags: flags)
+
+            case .flagsChanged:
+                keyboardEventCount += 1
+                if Self.isModifierPress(keyCode: keyCode, flags: flags) {
+                    KeyboardTracker.shared.trackModifierPress(keyCode: keyCode)
+                }
 
             case .scrollWheel:
                 mouseEventCount += 1

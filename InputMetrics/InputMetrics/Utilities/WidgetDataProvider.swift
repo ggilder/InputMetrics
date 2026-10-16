@@ -24,16 +24,18 @@ struct WidgetDailySummary: Codable, FetchableRecord {
 }
 
 enum WidgetDataProvider {
-    static let appGroupID = "group.com.inputmetrics.shared"
+    static var storageDirectory: URL {
+        FileManager.default
+            .urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("InputMetrics", isDirectory: true)
+    }
 
     static func sharedDatabaseURL() -> URL? {
-        FileManager.default
-            .containerURL(forSecurityApplicationGroupIdentifier: appGroupID)?
-            .appendingPathComponent("metrics.db")
+        storageDirectory.appendingPathComponent("metrics.db")
     }
 
     static func sharedDefaults() -> UserDefaults? {
-        UserDefaults(suiteName: appGroupID)
+        .standard
     }
 
     static func fetchTodaySummary() -> WidgetDailySummary? {
