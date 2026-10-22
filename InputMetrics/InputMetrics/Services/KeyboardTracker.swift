@@ -80,6 +80,7 @@ class KeyboardTracker {
         let today = DateHelper.todayString()
         let currentHour = getCurrentHour()
         let activityTimes = EventMonitor.shared.getActivityTimes()
+        let activeMinutes = EventMonitor.shared.getAndResetActiveMinutes()
         let speedStats = getSpeedStats()
 
         DatabaseManager.shared.updateDailySummary(
@@ -87,6 +88,7 @@ class KeyboardTracker {
             keystrokes: totalKeystrokes,
             firstActiveAt: activityTimes.first,
             lastActiveAt: activityTimes.last,
+            activeMinutes: activeMinutes,
             peakWPM: speedStats.peakWPM
         )
 

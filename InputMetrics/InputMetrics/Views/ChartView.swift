@@ -1,22 +1,15 @@
 import SwiftUI
 import Charts
 
-enum ChartMetric {
-    case distance
-    case keystrokes
-}
-
 struct ChartView: View {
-    @ObservedObject private var preferences = UserPreferences.shared
     let data: [DailySummary]
     let range: TimeRange
-    var metric: ChartMetric = .distance
 
     @State private var hoveredLabel: String?
 
     var body: some View {
         VStack(alignment: .leading) {
-            Text(chartTitle)
+            Text("Keystrokes")
                 .font(.headline)
                 .padding(.bottom, 4)
 
@@ -26,7 +19,7 @@ struct ChartView: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 Chart(data, id: \.date) { item in
-                    let value = metricValue(for: item)
+                    let value = Double(item.keystrokes)
 
                     AreaMark(
                         x: .value("Date", item.date),
@@ -53,7 +46,7 @@ struct ChartView: View {
                         RuleMark(x: .value("Date", item.date))
                             .foregroundStyle(Color.secondary.opacity(0.3))
                             .annotation(position: .top, spacing: 4) {
-                                Text(formattedTooltip(value: value))
+                                Text("\(Int(value))")
                                     .font(.caption)
                                     .padding(.horizontal, 6)
                                     .padding(.vertical, 2)
@@ -75,8 +68,8 @@ struct ChartView: View {
                     }
                 }
                 .accessibilityElement(children: .ignore)
-                .accessibilityLabel("\(chartTitle) chart for \(range == .week ? "this week" : range == .month ? "this month" : "this year")")
-                .chartYAxisLabel(yAxisLabel)
+                .accessibilityLabel("Keystrokes chart for \(range == .week ? "this week" : range == .month ? "this month" : "this year")")
+                .chartYAxisLabel("Keystrokes")
                 .chartOverlay { proxy in
                     GeometryReader { geometry in
                         Rectangle()
@@ -100,24 +93,6 @@ struct ChartView: View {
         }
     }
 
-    private var chartTitle: String {
-        switch metric {
-        case .distance:
-            return "Mouse Distance"
-        case .keystrokes:
-            return "Keystrokes"
-        }
-    }
-
-    private var yAxisLabel: String {
-        switch metric {
-        case .distance:
-            return preferences.distanceUnit == .metric ? "Distance (km)" : "Distance (mi)"
-        case .keystrokes:
-            return "Keystrokes"
-        }
-    }
-
     private func formatLabel(from dateString: String) -> String {
         let parser = DateFormatter()
         parser.locale = Locale(identifier: "en_US_POSIX")
@@ -135,38 +110,14 @@ struct ChartView: View {
         }
         return display.string(from: date)
     }
-
-    private func formattedTooltip(value: Double) -> String {
-        switch metric {
-        case .distance:
-            let unit = preferences.distanceUnit == .metric ? "km" : "mi"
-            return String(format: "%.2f %@", value, unit)
-        case .keystrokes:
-            return "\(Int(value))"
-        }
-    }
-
-    private func metricValue(for item: DailySummary) -> Double {
-        switch metric {
-        case .distance:
-            let meters = DistanceConverter.pixelsToMeters(item.mouseDistancePx)
-            if preferences.distanceUnit == .metric {
-                return DistanceConverter.metersToKilometers(meters)
-            } else {
-                return DistanceConverter.feetToMiles(DistanceConverter.metersToFeet(meters))
-            }
-        case .keystrokes:
-            return Double(item.keystrokes)
-        }
-    }
 }
 
 #Preview {
     ChartView(
         data: [
-            DailySummary(date: "2025-01-10", mouseDistancePx: 5000000, mouseClicksLeft: 100, mouseClicksRight: 20, mouseClicksMiddle: 5, keystrokes: 2000, scrollDistanceVertical: 0, scrollDistanceHorizontal: 0),
-            DailySummary(date: "2025-01-11", mouseDistancePx: 7000000, mouseClicksLeft: 150, mouseClicksRight: 30, mouseClicksMiddle: 8, keystrokes: 3000, scrollDistanceVertical: 0, scrollDistanceHorizontal: 0),
-            DailySummary(date: "2025-01-12", mouseDistancePx: 4000000, mouseClicksLeft: 80, mouseClicksRight: 15, mouseClicksMiddle: 3, keystrokes: 1500, scrollDistanceVertical: 0, scrollDistanceHorizontal: 0)
+            DailySummary(date: "2025-01-10", keystrokes: 2000),
+            DailySummary(date: "2025-01-11", keystrokes: 3000),
+            DailySummary(date: "2025-01-12", keystrokes: 1500)
         ],
         range: .week
     )

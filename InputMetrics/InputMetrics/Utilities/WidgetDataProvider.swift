@@ -3,21 +3,11 @@ import GRDB
 
 struct WidgetDailySummary: Codable, FetchableRecord {
     var date: String
-    var mouseDistancePx: Double
-    var mouseClicksLeft: Int
-    var mouseClicksRight: Int
-    var mouseClicksMiddle: Int
     var keystrokes: Int
     var activeMinutes: Int
 
-    var totalClicks: Int { mouseClicksLeft + mouseClicksRight + mouseClicksMiddle }
-
     enum CodingKeys: String, CodingKey {
         case date
-        case mouseDistancePx = "mouse_distance_px"
-        case mouseClicksLeft = "mouse_clicks_left"
-        case mouseClicksRight = "mouse_clicks_right"
-        case mouseClicksMiddle = "mouse_clicks_middle"
         case keystrokes
         case activeMinutes = "active_minutes"
     }
@@ -63,31 +53,6 @@ enum WidgetDataProvider {
         formatter.locale = Locale(identifier: "en_US_POSIX")
         formatter.dateFormat = "yyyy-MM-dd"
         return formatter.string(from: Date())
-    }
-
-    static func distanceUnit() -> String {
-        sharedDefaults()?.string(forKey: "distanceUnit") ?? "metric"
-    }
-
-    static func formatDistance(_ pixels: Double) -> String {
-        let pixelsPerMeter = 4330.0
-        let meters = pixels / pixelsPerMeter
-        let unit = distanceUnit()
-
-        if unit == "imperial" {
-            let feet = meters / 0.3048
-            if feet >= 5280 {
-                return String(format: "%.2f mi", feet / 5280)
-            } else {
-                return String(format: "%.1f ft", feet)
-            }
-        } else {
-            if meters >= 1000 {
-                return String(format: "%.2f km", meters / 1000)
-            } else {
-                return String(format: "%.1f m", meters)
-            }
-        }
     }
 
     static func formatActiveTime(_ minutes: Int) -> String {

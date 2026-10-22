@@ -61,28 +61,12 @@ final class KeyboardStatsViewModel {
 
         if calendar.isDateInToday(selectedDate) {
             let todayStr = formatter.string(from: selectedDate)
-            let mouseStats = MouseTracker.shared.getCurrentStats()
-            let keyboardStats = KeyboardTracker.shared.getCurrentKeystrokes()
+            let liveKeystrokes = KeyboardTracker.shared.getCurrentKeystrokes()
 
             if let idx = chartData.firstIndex(where: { $0.date == todayStr }) {
-                chartData[idx].mouseDistancePx += mouseStats.distance
-                chartData[idx].keystrokes += keyboardStats
-                chartData[idx].mouseClicksLeft += mouseStats.left
-                chartData[idx].mouseClicksRight += mouseStats.right
-                chartData[idx].mouseClicksMiddle += mouseStats.middle
-                chartData[idx].scrollDistanceVertical += mouseStats.scrollV
-                chartData[idx].scrollDistanceHorizontal += mouseStats.scrollH
+                chartData[idx].keystrokes += liveKeystrokes
             } else {
-                chartData.append(DailySummary(
-                    date: todayStr,
-                    mouseDistancePx: mouseStats.distance,
-                    mouseClicksLeft: mouseStats.left,
-                    mouseClicksRight: mouseStats.right,
-                    mouseClicksMiddle: mouseStats.middle,
-                    keystrokes: keyboardStats,
-                    scrollDistanceVertical: mouseStats.scrollV,
-                    scrollDistanceHorizontal: mouseStats.scrollH
-                ))
+                chartData.append(DailySummary(date: todayStr, keystrokes: liveKeystrokes))
             }
         }
 
@@ -115,13 +99,7 @@ final class KeyboardStatsViewModel {
             let firstDate = summaries.first?.date ?? ""
             return DailySummary(
                 date: firstDate,
-                mouseDistancePx: summaries.reduce(0) { $0 + $1.mouseDistancePx },
-                mouseClicksLeft: summaries.reduce(0) { $0 + $1.mouseClicksLeft },
-                mouseClicksRight: summaries.reduce(0) { $0 + $1.mouseClicksRight },
-                mouseClicksMiddle: summaries.reduce(0) { $0 + $1.mouseClicksMiddle },
-                keystrokes: summaries.reduce(0) { $0 + $1.keystrokes },
-                scrollDistanceVertical: summaries.reduce(0) { $0 + $1.scrollDistanceVertical },
-                scrollDistanceHorizontal: summaries.reduce(0) { $0 + $1.scrollDistanceHorizontal }
+                keystrokes: summaries.reduce(0) { $0 + $1.keystrokes }
             )
         }
     }

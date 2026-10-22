@@ -31,12 +31,6 @@ enum DataRetentionPeriod: String, CaseIterable, Identifiable {
 class UserPreferences: ObservableObject {
     static let shared = UserPreferences()
 
-    @Published var distanceUnit: DistanceUnit {
-        didSet {
-            UserDefaults.standard.set(distanceUnit.rawValue, forKey: "distanceUnit")
-        }
-    }
-
     @Published var showLiveStats: Bool {
         didSet {
             UserDefaults.standard.set(showLiveStats, forKey: "showLiveStats")
@@ -82,8 +76,6 @@ class UserPreferences: ObservableObject {
     }
 
     private init() {
-        let savedUnit = UserDefaults.standard.string(forKey: "distanceUnit") ?? DistanceUnit.metric.rawValue
-        self.distanceUnit = DistanceUnit(rawValue: savedUnit) ?? .metric
         self.showLiveStats = UserDefaults.standard.object(forKey: "showLiveStats") as? Bool ?? true
         self.hotkeyEnabled = UserDefaults.standard.object(forKey: "hotkeyEnabled") as? Bool ?? true
 

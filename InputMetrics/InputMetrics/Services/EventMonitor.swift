@@ -20,17 +20,14 @@ class EventMonitor {
     private var activeSeconds: TimeInterval = 0
     private let idleThreshold: TimeInterval = 300
 
-    private var appBuffer: [String: (name: String, keystrokes: Int, clicks: Int)] = [:]
+    private var appBuffer: [String: (name: String, keystrokes: Int)] = [:]
     private var appPersistTimer: Timer?
 
     private var sleepObserver: NSObjectProtocol?
     private var wakeObserver: NSObjectProtocol?
 
-    private var mouseEventCount: Int = 0
-    private var keyboardEventCount: Int = 0
-
     var isKeyboardPermissionLikelyMissing: Bool {
-        mouseEventCount > 50 && keyboardEventCount == 0
+        !CGPreflightListenEventAccess()
     }
 
     private static let timeFormatter: DateFormatter = {
@@ -55,19 +52,19 @@ class EventMonitor {
         if !CGPreflightListenEventAccess() { CGRequestListenEventAccess() }
         if createAndStartEventTap() { return }
 
-        AppLogger.events.warning("Event tap creation failed -- accessibility permission likely not granted")
-        AppLogger.events.info("Please enable InputMetrics in System Settings > Privacy & Security > Accessibility")
+        AppLogger.events.warning("Event tap creation failed -- input monitoring permission likely not granted")
+        AppLogger.events.info("Please enable InputMetrics in System Settings > Privacy & Security > Input Monitoring")
 
         let alert = NSAlert()
-        alert.messageText = "Accessibility Permission Required"
-        alert.informativeText = "InputMetrics needs Accessibility permission to track mouse and keyboard events.\n\n1. Open System Settings\n2. Go to Privacy & Security > Accessibility\n3. Enable InputMetrics\n\nThe app will start automatically once permission is granted."
+        alert.messageText = "Input Monitoring Permission Required"
+        alert.informativeText = "InputMetrics needs Input Monitoring permission to track keyboard events.\n\n1. Open System Settings\n2. Go to Privacy & Security > Input Monitoring\n3. Enable InputMetrics\n\nThe app will start automatically once permission is granted."
         alert.alertStyle = .warning
         alert.addButton(withTitle: "Open System Settings")
         alert.addButton(withTitle: "OK")
 
         let response = alert.runModal()
         if response == .alertFirstButtonReturn {
-            if let url = URL(string: "x-apple.systempreferences:com.apple.settings.PrivacySecurity.extension?Privacy_Accessibility") {
+            if let url = URL(string: "x-apple.systempreferences:com.apple.settings.PrivacySecurity.extension?Privacy_ListenEvent") {
                 NSWorkspace.shared.open(url)
             }
         }
@@ -93,13 +90,8 @@ class EventMonitor {
     }
 
     private func createAndStartEventTap() -> Bool {
-        let eventMask = (1 << CGEventType.mouseMoved.rawValue) |
-                       (1 << CGEventType.leftMouseDown.rawValue) |
-                       (1 << CGEventType.rightMouseDown.rawValue) |
-                       (1 << CGEventType.otherMouseDown.rawValue) |
-                       (1 << CGEventType.keyDown.rawValue) |
-                       (1 << CGEventType.flagsChanged.rawValue) |
-                       (1 << CGEventType.scrollWheel.rawValue)
+        let eventMask = (1 << CGEventType.keyDown.rawValue) |
+                       (1 << CGEventType.flagsChanged.rawValue)
 
         guard let tap = CGEvent.tapCreate(
             tap: .cgSessionEventTap,
@@ -146,8 +138,7 @@ class EventMonitor {
                 date: today,
                 bundleId: bundleId,
                 appName: data.name,
-                keystrokes: data.keystrokes,
-                mouseClicks: data.clicks
+                keystrokes: data.keystrokes
             )
         }
         appBuffer.removeAll()
@@ -188,7 +179,6 @@ class EventMonitor {
     }
 
     private func handleSleep() {
-        MouseTracker.shared.persistData()
         KeyboardTracker.shared.persistData()
         persistAppUsage()
     }
@@ -207,14 +197,15 @@ class EventMonitor {
         (firstActiveAt, lastActiveAt)
     }
 
-    func getAppUsageSnapshot() -> [String: (name: String, keystrokes: Int, clicks: Int)] {
+    func getAppUsageSnapshot() -> [String: (name: String, keystrokes: Int)] {
         appBuffer
     }
 
-    func getAndResetActiveSeconds() -> TimeInterval {
-        let seconds = activeSeconds
-        activeSeconds = 0
-        return seconds
+    /// Returns whole active minutes and keeps the leftover seconds for the next call.
+    func getAndResetActiveMinutes() -> Int {
+        let minutes = Int(activeSeconds / 60)
+        activeSeconds -= TimeInterval(minutes * 60)
+        return minutes
     }
 
     nonisolated private static func isModifierPress(keyCode: Int, flags: CGEventFlags) -> Bool {
@@ -234,12 +225,9 @@ class EventMonitor {
     }
 
     nonisolated private func handleEvent(type: CGEventType, event: CGEvent) {
-        let location = event.location
         let keyCode = Int(event.getIntegerValueField(.keyboardEventKeycode))
         let flags = event.flags
         let isAutoRepeat = type == .keyDown && event.getIntegerValueField(.keyboardEventAutorepeat) != 0
-        let scrollDeltaY = event.getDoubleValueField(.scrollWheelEventPointDeltaAxis1)
-        let scrollDeltaX = event.getDoubleValueField(.scrollWheelEventPointDeltaAxis2)
 
         MainActor.assumeIsolated {
             let now = Date()
@@ -262,37 +250,15 @@ class EventMonitor {
             lastEventTime = now
 
             switch type {
-            case .mouseMoved:
-                mouseEventCount += 1
-                MouseTracker.shared.trackMovement(to: location)
-
-            case .leftMouseDown:
-                mouseEventCount += 1
-                MouseTracker.shared.trackClick(type: .left, at: location)
-
-            case .rightMouseDown:
-                mouseEventCount += 1
-                MouseTracker.shared.trackClick(type: .right, at: location)
-
-            case .otherMouseDown:
-                mouseEventCount += 1
-                MouseTracker.shared.trackClick(type: .middle, at: location)
-
             case .keyDown:
                 if Self.isCountedKeystroke(type: type, isAutoRepeat: isAutoRepeat) {
-                    keyboardEventCount += 1
                     KeyboardTracker.shared.trackKeystroke(keyCode: keyCode, modifierFlags: flags)
                 }
 
             case .flagsChanged:
-                keyboardEventCount += 1
                 if Self.isModifierPress(keyCode: keyCode, flags: flags) {
                     KeyboardTracker.shared.trackModifierPress(keyCode: keyCode)
                 }
-
-            case .scrollWheel:
-                mouseEventCount += 1
-                MouseTracker.shared.trackScroll(deltaX: scrollDeltaX, deltaY: scrollDeltaY)
 
             default:
                 break
@@ -301,7 +267,7 @@ class EventMonitor {
             if let app = NSWorkspace.shared.frontmostApplication,
                let bundleId = app.bundleIdentifier {
                 let name = app.localizedName ?? bundleId
-                var entry = appBuffer[bundleId] ?? (name: name, keystrokes: 0, clicks: 0)
+                var entry = appBuffer[bundleId] ?? (name: name, keystrokes: 0)
                 entry.name = name
 
                 switch type {
@@ -309,8 +275,6 @@ class EventMonitor {
                     if Self.isCountedKeystroke(type: type, isAutoRepeat: isAutoRepeat) {
                         entry.keystrokes += 1
                     }
-                case .leftMouseDown, .rightMouseDown, .otherMouseDown:
-                    entry.clicks += 1
                 default:
                     break
                 }

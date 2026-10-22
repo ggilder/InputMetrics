@@ -16,7 +16,7 @@ struct AppUsageView: View {
             } else {
                 Chart(topApps, id: \.bundleId) { entry in
                     BarMark(
-                        x: .value("Activity", entry.keystrokes + entry.mouseClicks),
+                        x: .value("Keystrokes", entry.keystrokes),
                         y: .value("App", entry.appName)
                     )
                     .foregroundStyle(.blue)

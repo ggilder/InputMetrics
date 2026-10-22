@@ -179,7 +179,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         milestoneTimer = nil
 
         MainActor.assumeIsolated {
-            MouseTracker.shared.persistData()
             KeyboardTracker.shared.persistData()
             EventMonitor.shared.stop()
         }
@@ -261,30 +260,18 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             return
         }
 
-        let mouseStats = MouseTracker.shared.getCurrentStats()
-        let keyboardStats = KeyboardTracker.shared.getCurrentKeystrokes()
+        var totalKeystrokes = KeyboardTracker.shared.getCurrentKeystrokes()
 
-        let today = DateHelper.todayString()
-        let summary = DatabaseManager.shared.getDailySummary(date: today)
-
-        var totalDistance = mouseStats.distance
-        var totalKeystrokes = keyboardStats
-
-        if let summary {
-            totalDistance += summary.mouseDistancePx
+        if let summary = DatabaseManager.shared.getDailySummary(date: DateHelper.todayString()) {
             totalKeystrokes += summary.keystrokes
         }
 
-        let distanceMeters = totalDistance / 4330.0
-        let distanceText = formatDistance(distanceMeters)
-        let keystrokesText = formatCount(totalKeystrokes)
-
         button.title = ""
         button.image = nil
-        configureStatusButton(button, distanceText: distanceText, keystrokesText: keystrokesText)
+        configureStatusButton(button, keystrokesText: formatCount(totalKeystrokes))
     }
 
-    private func configureStatusButton(_ button: NSStatusBarButton, distanceText: String, keystrokesText: String) {
+    private func configureStatusButton(_ button: NSStatusBarButton, keystrokesText: String) {
         button.subviews.forEach { $0.removeFromSuperview() }
 
         let container = NSStackView()
@@ -302,26 +289,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             iconView.heightAnchor.constraint(equalToConstant: 18)
         ])
 
-        let statsStack = NSStackView()
-        statsStack.orientation = .vertical
-        statsStack.spacing = 0
-        statsStack.alignment = .leading
-
-        let font = NSFont.monospacedDigitSystemFont(ofSize: 9, weight: .medium)
-
-        let distanceLabel = NSTextField(labelWithString: distanceText)
-        distanceLabel.font = font
-        distanceLabel.textColor = .labelColor
-
         let keystrokesLabel = NSTextField(labelWithString: keystrokesText)
-        keystrokesLabel.font = font
+        keystrokesLabel.font = NSFont.monospacedDigitSystemFont(ofSize: 10, weight: .medium)
         keystrokesLabel.textColor = .labelColor
 
-        statsStack.addArrangedSubview(distanceLabel)
-        statsStack.addArrangedSubview(keystrokesLabel)
-
         container.addArrangedSubview(iconView)
-        container.addArrangedSubview(statsStack)
+        container.addArrangedSubview(keystrokesLabel)
 
         container.translatesAutoresizingMaskIntoConstraints = false
         button.addSubview(container)
@@ -332,23 +305,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         let fittingSize = container.fittingSize
         statusItem?.length = fittingSize.width + 4
-    }
-
-    private func formatDistance(_ meters: Double) -> String {
-        if UserPreferences.shared.distanceUnit == .imperial {
-            let feet = meters / Constants.metersPerFoot
-            if feet >= Constants.feetPerMile {
-                return String(format: "%.1fmi", feet / Constants.feetPerMile)
-            } else {
-                return String(format: "%.0fft", feet)
-            }
-        } else {
-            if meters >= 1000 {
-                return String(format: "%.1fkm", meters / 1000)
-            } else {
-                return String(format: "%.0fm", meters)
-            }
-        }
     }
 
     private func formatCount(_ count: Int) -> String {

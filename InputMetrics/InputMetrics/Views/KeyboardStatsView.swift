@@ -60,7 +60,7 @@ struct KeyboardStatsView: View {
                     .padding(.horizontal)
 
                     // Chart
-                    ChartView(data: viewModel.chartData, range: viewModel.selectedRange, metric: .keystrokes)
+                    ChartView(data: viewModel.chartData, range: viewModel.selectedRange)
                         .frame(height: 250)
                         .padding()
 

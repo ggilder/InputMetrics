@@ -26,7 +26,7 @@ final class DatabaseManager: @unchecked Sendable {
             AppLogger.database.info("Database path: \(dbPath)")
 
             dbQueue = try DatabaseQueue(path: dbPath)
-            try migrator.migrate(dbQueue!)
+            try Self.migrator.migrate(dbQueue!)
 
             AppLogger.database.info("Database initialized")
         } catch {
@@ -35,7 +35,7 @@ final class DatabaseManager: @unchecked Sendable {
         }
     }
 
-    private var migrator: DatabaseMigrator {
+    static var migrator: DatabaseMigrator {
         var migrator = DatabaseMigrator()
 
         #if DEBUG
@@ -51,13 +51,14 @@ final class DatabaseManager: @unchecked Sendable {
         registerV7Migration(&migrator)
         registerV8Migration(&migrator)
         registerV9Migration(&migrator)
+        registerV10Migration(&migrator)
 
         return migrator
     }
 
     // MARK: - Migrations
 
-    private func registerV1Migration(_ migrator: inout DatabaseMigrator) {
+    private static func registerV1Migration(_ migrator: inout DatabaseMigrator) {
         migrator.registerMigration("v1") { db in
             try db.create(table: "daily_summary") { t in
                 t.column("date", .text).primaryKey()
@@ -70,7 +71,7 @@ final class DatabaseManager: @unchecked Sendable {
         }
     }
 
-    private func registerV2Migration(_ migrator: inout DatabaseMigrator) {
+    private static func registerV2Migration(_ migrator: inout DatabaseMigrator) {
         migrator.registerMigration("v2") { db in
             try db.create(table: "mouse_heatmap") { t in
                 t.column("date", .text)
@@ -83,7 +84,7 @@ final class DatabaseManager: @unchecked Sendable {
         }
     }
 
-    private func registerV3Migration(_ migrator: inout DatabaseMigrator) {
+    private static func registerV3Migration(_ migrator: inout DatabaseMigrator) {
         migrator.registerMigration("v3") { db in
             try db.create(table: "keyboard_heatmap") { t in
                 t.column("date", .text)
@@ -95,7 +96,7 @@ final class DatabaseManager: @unchecked Sendable {
         }
     }
 
-    private func registerV4Migration(_ migrator: inout DatabaseMigrator) {
+    private static func registerV4Migration(_ migrator: inout DatabaseMigrator) {
         migrator.registerMigration("v4") { db in
             try db.create(table: "hourly_summary") { t in
                 t.column("date", .text)
@@ -108,7 +109,7 @@ final class DatabaseManager: @unchecked Sendable {
         }
     }
 
-    private func registerV5Migration(_ migrator: inout DatabaseMigrator) {
+    private static func registerV5Migration(_ migrator: inout DatabaseMigrator) {
         migrator.registerMigration("v5") { db in
             try db.alter(table: "daily_summary") { t in
                 t.add(column: "scroll_distance_vertical", .double).defaults(to: 0)
@@ -117,7 +118,7 @@ final class DatabaseManager: @unchecked Sendable {
         }
     }
 
-    private func registerV6Migration(_ migrator: inout DatabaseMigrator) {
+    private static func registerV6Migration(_ migrator: inout DatabaseMigrator) {
         migrator.registerMigration("v6") { db in
             try db.alter(table: "daily_summary") { t in
                 t.add(column: "first_active_at", .text)
@@ -126,7 +127,7 @@ final class DatabaseManager: @unchecked Sendable {
         }
     }
 
-    private func registerV7Migration(_ migrator: inout DatabaseMigrator) {
+    private static func registerV7Migration(_ migrator: inout DatabaseMigrator) {
         migrator.registerMigration("v7") { db in
             try db.alter(table: "daily_summary") { t in
                 t.add(column: "active_minutes", .integer).defaults(to: 0)
@@ -134,7 +135,7 @@ final class DatabaseManager: @unchecked Sendable {
         }
     }
 
-    private func registerV8Migration(_ migrator: inout DatabaseMigrator) {
+    private static func registerV8Migration(_ migrator: inout DatabaseMigrator) {
         migrator.registerMigration("v8") { db in
             try db.create(table: "app_usage") { t in
                 t.column("date", .text)
@@ -148,7 +149,7 @@ final class DatabaseManager: @unchecked Sendable {
         }
     }
 
-    private func registerV9Migration(_ migrator: inout DatabaseMigrator) {
+    private static func registerV9Migration(_ migrator: inout DatabaseMigrator) {
         migrator.registerMigration("v9") { db in
             try db.alter(table: "daily_summary") { t in
                 t.add(column: "avg_mouse_speed", .double).defaults(to: 0)
@@ -158,22 +159,37 @@ final class DatabaseManager: @unchecked Sendable {
         }
     }
 
+    private static func registerV10Migration(_ migrator: inout DatabaseMigrator) {
+        migrator.registerMigration("v10") { db in
+            try db.drop(table: "mouse_heatmap")
+            try db.alter(table: "daily_summary") { t in
+                t.drop(column: "mouse_distance_px")
+                t.drop(column: "mouse_clicks_left")
+                t.drop(column: "mouse_clicks_right")
+                t.drop(column: "mouse_clicks_middle")
+                t.drop(column: "scroll_distance_vertical")
+                t.drop(column: "scroll_distance_horizontal")
+                t.drop(column: "avg_mouse_speed")
+                t.drop(column: "peak_mouse_speed")
+            }
+            try db.alter(table: "hourly_summary") { t in
+                t.drop(column: "mouse_distance_px")
+                t.drop(column: "mouse_clicks")
+            }
+            try db.alter(table: "app_usage") { t in
+                t.drop(column: "mouse_clicks")
+            }
+        }
+    }
+
     // MARK: - Daily Summary Operations
 
     func updateDailySummary(
         date: String,
-        mouseDistance: Double = 0,
-        leftClicks: Int = 0,
-        rightClicks: Int = 0,
-        middleClicks: Int = 0,
         keystrokes: Int = 0,
-        scrollVertical: Double = 0,
-        scrollHorizontal: Double = 0,
         firstActiveAt: String? = nil,
         lastActiveAt: String? = nil,
         activeMinutes: Int = 0,
-        avgMouseSpeed: Double = 0,
-        peakMouseSpeed: Double = 0,
         peakWPM: Double = 0
     ) {
         guard let db = dbQueue else { return }
@@ -183,24 +199,16 @@ final class DatabaseManager: @unchecked Sendable {
                 try db.write { db in
                     try db.execute(
                         sql: """
-                            INSERT INTO daily_summary (date, mouse_distance_px, mouse_clicks_left, mouse_clicks_right, mouse_clicks_middle, keystrokes, scroll_distance_vertical, scroll_distance_horizontal, first_active_at, last_active_at, active_minutes, avg_mouse_speed, peak_mouse_speed, peak_wpm)
-                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                            INSERT INTO daily_summary (date, keystrokes, first_active_at, last_active_at, active_minutes, peak_wpm)
+                            VALUES (?, ?, ?, ?, ?, ?)
                             ON CONFLICT(date) DO UPDATE SET
-                                mouse_distance_px = mouse_distance_px + excluded.mouse_distance_px,
-                                mouse_clicks_left = mouse_clicks_left + excluded.mouse_clicks_left,
-                                mouse_clicks_right = mouse_clicks_right + excluded.mouse_clicks_right,
-                                mouse_clicks_middle = mouse_clicks_middle + excluded.mouse_clicks_middle,
                                 keystrokes = keystrokes + excluded.keystrokes,
-                                scroll_distance_vertical = scroll_distance_vertical + excluded.scroll_distance_vertical,
-                                scroll_distance_horizontal = scroll_distance_horizontal + excluded.scroll_distance_horizontal,
                                 first_active_at = COALESCE(daily_summary.first_active_at, excluded.first_active_at),
                                 last_active_at = COALESCE(daily_summary.last_active_at, excluded.last_active_at),
                                 active_minutes = active_minutes + excluded.active_minutes,
-                                avg_mouse_speed = CASE WHEN excluded.avg_mouse_speed > 0 THEN excluded.avg_mouse_speed ELSE daily_summary.avg_mouse_speed END,
-                                peak_mouse_speed = CASE WHEN excluded.peak_mouse_speed > daily_summary.peak_mouse_speed THEN excluded.peak_mouse_speed ELSE daily_summary.peak_mouse_speed END,
                                 peak_wpm = CASE WHEN excluded.peak_wpm > daily_summary.peak_wpm THEN excluded.peak_wpm ELSE daily_summary.peak_wpm END
                             """,
-                        arguments: [date, mouseDistance, leftClicks, rightClicks, middleClicks, keystrokes, scrollVertical, scrollHorizontal, firstActiveAt, lastActiveAt, activeMinutes, avgMouseSpeed, peakMouseSpeed, peakWPM]
+                        arguments: [date, keystrokes, firstActiveAt, lastActiveAt, activeMinutes, peakWPM]
                     )
                 }
             } catch {
@@ -243,8 +251,6 @@ final class DatabaseManager: @unchecked Sendable {
     func updateHourlySummary(
         date: String,
         hour: Int,
-        mouseDistance: Double = 0,
-        mouseClicks: Int = 0,
         keystrokes: Int = 0
     ) {
         guard let db = dbQueue else { return }
@@ -256,16 +262,12 @@ final class DatabaseManager: @unchecked Sendable {
                         .filter(HourlySummary.Columns.date == date)
                         .filter(HourlySummary.Columns.hour == hour)
                         .fetchOne(db) {
-                        summary.mouseDistancePx += mouseDistance
-                        summary.mouseClicks += mouseClicks
                         summary.keystrokes += keystrokes
                         try summary.update(db)
                     } else {
                         let newSummary = HourlySummary(
                             date: date,
                             hour: hour,
-                            mouseDistancePx: mouseDistance,
-                            mouseClicks: mouseClicks,
                             keystrokes: keystrokes
                         )
                         try newSummary.insert(db)
@@ -305,100 +307,6 @@ final class DatabaseManager: @unchecked Sendable {
             }
         } catch {
             AppLogger.database.error("Fetch hourly summaries range failed: \(error.localizedDescription)")
-            return []
-        }
-    }
-
-    // MARK: - Mouse Heatmap Operations
-
-    func updateMouseHeatmap(date: String, screenId: String, bucketX: Int, bucketY: Int) {
-        guard let db = dbQueue else { return }
-
-        dbQueue_serial.async {
-            do {
-                try db.write { db in
-                    try db.execute(
-                        sql: """
-                            INSERT INTO mouse_heatmap (date, screen_id, bucket_x, bucket_y, click_count)
-                            VALUES (?, ?, ?, ?, 1)
-                            ON CONFLICT(date, screen_id, bucket_x, bucket_y) DO UPDATE SET
-                                click_count = click_count + 1
-                            """,
-                        arguments: [date, screenId, bucketX, bucketY]
-                    )
-                }
-            } catch {
-                AppLogger.database.error("Update mouse heatmap failed: \(error.localizedDescription)")
-            }
-        }
-    }
-
-    func batchUpdateMouseHeatmap(_ buffer: [HeatmapBucketKey: Int]) {
-        guard let db = dbQueue else { return }
-
-        dbQueue_serial.async {
-            do {
-                try db.write { db in
-                    for (key, count) in buffer {
-                        if var entry = try MouseHeatmapEntry
-                            .filter(MouseHeatmapEntry.Columns.date == key.date)
-                            .filter(MouseHeatmapEntry.Columns.screenId == key.screenId)
-                            .filter(MouseHeatmapEntry.Columns.bucketX == key.bucketX)
-                            .filter(MouseHeatmapEntry.Columns.bucketY == key.bucketY)
-                            .fetchOne(db) {
-                            entry.clickCount += count
-                            try entry.update(db)
-                        } else {
-                            let newEntry = MouseHeatmapEntry(
-                                date: key.date,
-                                screenId: key.screenId,
-                                bucketX: key.bucketX,
-                                bucketY: key.bucketY,
-                                clickCount: count
-                            )
-                            try newEntry.insert(db)
-                        }
-                    }
-                }
-            } catch {
-                AppLogger.database.error("Batch update mouse heatmap failed: \(error.localizedDescription)")
-            }
-        }
-    }
-
-    func getMouseHeatmap(date: String, screenId: String? = nil) -> [MouseHeatmapEntry] {
-        guard let db = dbQueue else { return [] }
-
-        do {
-            return try db.read { db in
-                var request = MouseHeatmapEntry
-                    .filter(MouseHeatmapEntry.Columns.date == date)
-
-                if let screenId {
-                    request = request.filter(MouseHeatmapEntry.Columns.screenId == screenId)
-                }
-
-                return try request.fetchAll(db)
-            }
-        } catch {
-            AppLogger.database.error("Fetch mouse heatmap failed: \(error.localizedDescription)")
-            return []
-        }
-    }
-
-    func getDistinctScreenIds(date: String) -> [String] {
-        guard let db = dbQueue else { return [] }
-
-        do {
-            return try db.read { db in
-                try String.fetchAll(
-                    db,
-                    sql: "SELECT DISTINCT screen_id FROM mouse_heatmap WHERE date = ? ORDER BY screen_id",
-                    arguments: [date]
-                )
-            }
-        } catch {
-            AppLogger.database.error("Fetch screen IDs failed: \(error.localizedDescription)")
             return []
         }
     }
@@ -475,7 +383,7 @@ final class DatabaseManager: @unchecked Sendable {
 
     // MARK: - App Usage Operations
 
-    func updateAppUsage(date: String, bundleId: String, appName: String, keystrokes: Int = 0, mouseClicks: Int = 0, activeSeconds: Int = 0) {
+    func updateAppUsage(date: String, bundleId: String, appName: String, keystrokes: Int = 0, activeSeconds: Int = 0) {
         guard let db = dbQueue else { return }
 
         dbQueue_serial.async {
@@ -483,15 +391,14 @@ final class DatabaseManager: @unchecked Sendable {
                 try db.write { db in
                     try db.execute(
                         sql: """
-                            INSERT INTO app_usage (date, bundle_id, app_name, keystrokes, mouse_clicks, active_seconds)
-                            VALUES (?, ?, ?, ?, ?, ?)
+                            INSERT INTO app_usage (date, bundle_id, app_name, keystrokes, active_seconds)
+                            VALUES (?, ?, ?, ?, ?)
                             ON CONFLICT(date, bundle_id) DO UPDATE SET
                                 app_name = excluded.app_name,
                                 keystrokes = keystrokes + excluded.keystrokes,
-                                mouse_clicks = mouse_clicks + excluded.mouse_clicks,
                                 active_seconds = active_seconds + excluded.active_seconds
                             """,
-                        arguments: [date, bundleId, appName, keystrokes, mouseClicks, activeSeconds]
+                        arguments: [date, bundleId, appName, keystrokes, activeSeconds]
                     )
                 }
             } catch {
@@ -518,50 +425,16 @@ final class DatabaseManager: @unchecked Sendable {
 
     // MARK: - Aggregated Totals
 
-    struct AllTimeTotals {
-        var distance: Double
-        var clicksLeft: Int
-        var clicksRight: Int
-        var clicksMiddle: Int
-        var keystrokes: Int
-        var scrollVertical: Double
-        var scrollHorizontal: Double
-
-        static let zero = AllTimeTotals(distance: 0, clicksLeft: 0, clicksRight: 0, clicksMiddle: 0, keystrokes: 0, scrollVertical: 0, scrollHorizontal: 0)
-
-        var totalClicks: Int { clicksLeft + clicksRight + clicksMiddle }
-    }
-
-    func getAllTimeTotals() -> AllTimeTotals {
-        guard let db = dbQueue else { return .zero }
+    func getAllTimeKeystrokes() -> Int {
+        guard let db = dbQueue else { return 0 }
 
         do {
             return try db.read { db in
-                let row = try Row.fetchOne(db, sql: """
-                    SELECT
-                        COALESCE(SUM(mouse_distance_px), 0) AS distance,
-                        COALESCE(SUM(mouse_clicks_left), 0) AS clicks_left,
-                        COALESCE(SUM(mouse_clicks_right), 0) AS clicks_right,
-                        COALESCE(SUM(mouse_clicks_middle), 0) AS clicks_middle,
-                        COALESCE(SUM(keystrokes), 0) AS keystrokes,
-                        COALESCE(SUM(scroll_distance_vertical), 0) AS scroll_vertical,
-                        COALESCE(SUM(scroll_distance_horizontal), 0) AS scroll_horizontal
-                    FROM daily_summary
-                    """)
-                guard let row else { return .zero }
-                return AllTimeTotals(
-                    distance: row["distance"],
-                    clicksLeft: row["clicks_left"],
-                    clicksRight: row["clicks_right"],
-                    clicksMiddle: row["clicks_middle"],
-                    keystrokes: row["keystrokes"],
-                    scrollVertical: row["scroll_vertical"],
-                    scrollHorizontal: row["scroll_horizontal"]
-                )
+                try Int.fetchOne(db, sql: "SELECT COALESCE(SUM(keystrokes), 0) FROM daily_summary") ?? 0
             }
         } catch {
-            AppLogger.database.error("Fetch all-time totals failed: \(error.localizedDescription)")
-            return .zero
+            AppLogger.database.error("Fetch all-time keystrokes failed: \(error.localizedDescription)")
+            return 0
         }
     }
 
@@ -591,19 +464,6 @@ final class DatabaseManager: @unchecked Sendable {
             }
         } catch {
             AppLogger.database.error("Fetch all hourly summaries failed: \(error.localizedDescription)")
-            return []
-        }
-    }
-
-    func getAllMouseHeatmapEntries() -> [MouseHeatmapEntry] {
-        guard let db = dbQueue else { return [] }
-
-        do {
-            return try db.read { db in
-                try MouseHeatmapEntry.order(MouseHeatmapEntry.Columns.date).fetchAll(db)
-            }
-        } catch {
-            AppLogger.database.error("Fetch all mouse heatmap entries failed: \(error.localizedDescription)")
             return []
         }
     }
@@ -652,7 +512,7 @@ final class DatabaseManager: @unchecked Sendable {
     }
 
     private static let requiredTables: Set<String> = [
-        "daily_summary", "mouse_heatmap", "keyboard_heatmap", "hourly_summary", "app_usage"
+        "daily_summary", "keyboard_heatmap", "hourly_summary", "app_usage"
     ]
 
     func restoreDatabase(from url: URL) throws {
@@ -690,7 +550,7 @@ final class DatabaseManager: @unchecked Sendable {
 
         // Re-run migrations in case the backup is from an older schema
         do {
-            try migrator.migrate(dbQueue!)
+            try Self.migrator.migrate(dbQueue!)
         } catch {
             AppLogger.database.error("Migration after restore failed: \(error.localizedDescription)")
             throw NSError(domain: "InputMetrics", code: 6, userInfo: [NSLocalizedDescriptionKey: "Migration after restore failed: \(error.localizedDescription)"])
@@ -708,7 +568,6 @@ final class DatabaseManager: @unchecked Sendable {
             do {
                 try db.write { db in
                     try db.execute(sql: "DELETE FROM \(DailySummary.databaseTableName)")
-                    try db.execute(sql: "DELETE FROM \(MouseHeatmapEntry.databaseTableName)")
                     try db.execute(sql: "DELETE FROM \(KeyboardEntry.databaseTableName)")
                     try db.execute(sql: "DELETE FROM \(HourlySummary.databaseTableName)")
                     try db.execute(sql: "DELETE FROM \(AppUsageEntry.databaseTableName)")
@@ -740,7 +599,6 @@ final class DatabaseManager: @unchecked Sendable {
                 try db.write { db in
                     try db.inTransaction {
                         try db.execute(sql: "DELETE FROM daily_summary WHERE date < ?", arguments: [cutoffString])
-                        try db.execute(sql: "DELETE FROM mouse_heatmap WHERE date < ?", arguments: [cutoffString])
                         try db.execute(sql: "DELETE FROM keyboard_heatmap WHERE date < ?", arguments: [cutoffString])
                         try db.execute(sql: "DELETE FROM hourly_summary WHERE date < ?", arguments: [cutoffString])
                         try db.execute(sql: "DELETE FROM app_usage WHERE date < ?", arguments: [cutoffString])
@@ -769,20 +627,19 @@ final class DatabaseManager: @unchecked Sendable {
         }
     }
 
-    func getRecordCounts() -> (dailySummaries: Int, mouseHeatmap: Int, keyboardHeatmap: Int, hourlySummaries: Int) {
-        guard let db = dbQueue else { return (0, 0, 0, 0) }
+    func getRecordCounts() -> (dailySummaries: Int, keyboardHeatmap: Int, hourlySummaries: Int) {
+        guard let db = dbQueue else { return (0, 0, 0) }
 
         do {
             return try db.read { db in
                 let daily = try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM daily_summary") ?? 0
-                let mouse = try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM mouse_heatmap") ?? 0
                 let keyboard = try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM keyboard_heatmap") ?? 0
                 let hourly = try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM hourly_summary") ?? 0
-                return (daily, mouse, keyboard, hourly)
+                return (daily, keyboard, hourly)
             }
         } catch {
             AppLogger.database.error("Get record counts failed: \(error.localizedDescription)")
-            return (0, 0, 0, 0)
+            return (0, 0, 0)
         }
     }
 }

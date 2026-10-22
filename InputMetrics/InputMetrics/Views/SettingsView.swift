@@ -130,25 +130,6 @@ struct SettingsView: View {
                         }
                     }
 
-                    // Display Section
-                    SettingsSectionView(title: "Display", icon: "ruler") {
-                        SettingsRowView {
-                            VStack(alignment: .leading, spacing: 12) {
-                                Label("Distance units", systemImage: "arrow.left.and.right")
-                                    .font(.body)
-
-                                Picker("", selection: $preferences.distanceUnit) {
-                                    Label("Metric (km/m)", systemImage: "m.square")
-                                        .tag(DistanceUnit.metric)
-                                    Label("Imperial (mi/ft)", systemImage: "i.square")
-                                        .tag(DistanceUnit.imperial)
-                                }
-                                .pickerStyle(.segmented)
-                                .labelsHidden()
-                            }
-                        }
-                    }
-
                     // Goals Section
                     SettingsSectionView(title: "Goals", icon: "target") {
                         SettingsGroupView {
@@ -178,26 +159,6 @@ struct SettingsView: View {
                                             Text("\(preferences.goalConfig.keystrokesDaily)")
                                                 .monospacedDigit()
                                                 .frame(width: 60, alignment: .trailing)
-                                        }
-                                    }
-                                }
-
-                                Divider()
-                                    .padding(.horizontal)
-
-                                SettingsGroupItemView {
-                                    VStack(alignment: .leading, spacing: 8) {
-                                        Label("Daily distance goal (km)", systemImage: "arrow.up.right")
-                                            .font(.body)
-                                        let kmValue = Binding(
-                                            get: { preferences.goalConfig.distanceDaily / 4_330_000 },
-                                            set: { preferences.goalConfig.distanceDaily = $0 * 4_330_000 }
-                                        )
-                                        HStack {
-                                            Slider(value: kmValue, in: 0.1...10, step: 0.1)
-                                            Text(String(format: "%.1f km", kmValue.wrappedValue))
-                                                .monospacedDigit()
-                                                .frame(width: 70, alignment: .trailing)
                                         }
                                     }
                                 }
@@ -588,14 +549,12 @@ struct SettingsView: View {
         struct ExportData: Codable {
             let dailySummaries: [DailySummary]
             let hourlySummaries: [HourlySummary]
-            let mouseHeatmap: [MouseHeatmapEntry]
             let keyboardHeatmap: [KeyboardEntry]
         }
 
         let data = ExportData(
             dailySummaries: DatabaseManager.shared.getAllDailySummaries(),
             hourlySummaries: DatabaseManager.shared.getAllHourlySummaries(),
-            mouseHeatmap: DatabaseManager.shared.getAllMouseHeatmapEntries(),
             keyboardHeatmap: DatabaseManager.shared.getAllKeyboardEntries()
         )
 
@@ -612,34 +571,15 @@ struct SettingsView: View {
     private func generateCSV() -> String {
         var lines: [String] = []
 
-        lines.append(csvRow(["Date", "Mouse Distance (px)", "Left Clicks", "Right Clicks", "Middle Clicks", "Keystrokes", "Scroll Vertical", "Scroll Horizontal"]))
+        lines.append(csvRow(["Date", "Keystrokes", "Active Minutes", "Peak WPM"]))
 
         let allSummaries = DatabaseManager.shared.getAllDailySummaries()
         for summary in allSummaries {
             lines.append(csvRow([
                 summary.date,
-                "\(summary.mouseDistancePx)",
-                "\(summary.mouseClicksLeft)",
-                "\(summary.mouseClicksRight)",
-                "\(summary.mouseClicksMiddle)",
                 "\(summary.keystrokes)",
-                "\(summary.scrollDistanceVertical)",
-                "\(summary.scrollDistanceHorizontal)"
-            ]))
-        }
-
-        lines.append("")
-
-        lines.append(csvRow(["Date", "Screen ID", "Bucket X", "Bucket Y", "Click Count"]))
-
-        let allMouseData = DatabaseManager.shared.getAllMouseHeatmapEntries()
-        for entry in allMouseData {
-            lines.append(csvRow([
-                entry.date,
-                "\(entry.screenId)",
-                "\(entry.bucketX)",
-                "\(entry.bucketY)",
-                "\(entry.clickCount)"
+                "\(summary.activeMinutes)",
+                "\(summary.peakWPM)"
             ]))
         }
 
@@ -701,7 +641,6 @@ struct SettingsView: View {
 
     private func resetData() {
         DatabaseManager.shared.resetAllData()
-        MouseTracker.shared.reset()
         KeyboardTracker.shared.reset()
         exportResult = .success("All data has been reset")
         refreshDatabaseInfo()
@@ -712,7 +651,7 @@ struct SettingsView: View {
         databaseSize = formatFileSize(sizeBytes)
 
         let counts = DatabaseManager.shared.getRecordCounts()
-        totalRecords = counts.dailySummaries + counts.mouseHeatmap + counts.keyboardHeatmap + counts.hourlySummaries
+        totalRecords = counts.dailySummaries + counts.keyboardHeatmap + counts.hourlySummaries
     }
 
     private func formatFileSize(_ bytes: Int64) -> String {

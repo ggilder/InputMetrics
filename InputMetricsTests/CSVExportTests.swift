@@ -23,24 +23,15 @@ final class CSVExportTests: XCTestCase {
     }
 
     func testDailySummaryEncodesToJSON() throws {
-        let summary = DailySummary(
-            date: "2025-01-15",
-            mouseDistancePx: 1000,
-            mouseClicksLeft: 10,
-            mouseClicksRight: 5,
-            mouseClicksMiddle: 2,
-            keystrokes: 500,
-            scrollDistanceVertical: 100,
-            scrollDistanceHorizontal: 50
-        )
+        let summary = DailySummary(date: "2025-01-15", keystrokes: 500, activeMinutes: 30, peakWPM: 80)
 
         let encoder = JSONEncoder()
         let data = try encoder.encode(summary)
         let decoded = try JSONDecoder().decode(DailySummary.self, from: data)
 
         XCTAssertEqual(decoded.date, summary.date)
-        XCTAssertEqual(decoded.mouseDistancePx, summary.mouseDistancePx)
         XCTAssertEqual(decoded.keystrokes, summary.keystrokes)
+        XCTAssertEqual(decoded.activeMinutes, summary.activeMinutes)
     }
 
     func testKeyboardEntryEncodesToJSON() throws {

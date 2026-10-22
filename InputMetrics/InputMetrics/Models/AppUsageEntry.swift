@@ -8,7 +8,6 @@ struct AppUsageEntry: Codable, FetchableRecord, PersistableRecord {
     var bundleId: String
     var appName: String
     var keystrokes: Int
-    var mouseClicks: Int
     var activeSeconds: Int
 
     enum CodingKeys: String, CodingKey {
@@ -16,7 +15,6 @@ struct AppUsageEntry: Codable, FetchableRecord, PersistableRecord {
         case bundleId = "bundle_id"
         case appName = "app_name"
         case keystrokes
-        case mouseClicks = "mouse_clicks"
         case activeSeconds = "active_seconds"
     }
 
@@ -25,7 +23,6 @@ struct AppUsageEntry: Codable, FetchableRecord, PersistableRecord {
         static let bundleId = Column(CodingKeys.bundleId)
         static let appName = Column(CodingKeys.appName)
         static let keystrokes = Column(CodingKeys.keystrokes)
-        static let mouseClicks = Column(CodingKeys.mouseClicks)
         static let activeSeconds = Column(CodingKeys.activeSeconds)
     }
 }

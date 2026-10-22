@@ -5,7 +5,6 @@ import Charts
 struct MenuBarView: View {
     @ObservedObject private var preferences = UserPreferences.shared
     @State private var viewModel = MenuBarViewModel()
-    @State private var hoveredMouseLabel: String?
     @State private var hoveredKeyboardLabel: String?
     @State private var showKeyboardWarning = false
     @State private var dataRefreshTick = 0
@@ -27,12 +26,8 @@ struct MenuBarView: View {
 
                 Spacer()
 
-                Picker("Metric", selection: $viewModel.selectedTab) {
-                    Text("Mouse Metrics").tag(MenuBarViewModel.MetricTab.mouse)
-                    Text("Keyboard Metrics").tag(MenuBarViewModel.MetricTab.keyboard)
-                }
-                .pickerStyle(.segmented)
-                .labelsHidden()
+                Text("Keyboard Metrics")
+                    .font(.headline)
 
                 Spacer()
 
@@ -147,29 +142,12 @@ struct MenuBarView: View {
                                         .monospacedDigit()
                                         .frame(width: 40, alignment: .trailing)
                                 }
-
-                                HStack {
-                                    Image(systemName: "arrow.up.right")
-                                        .foregroundStyle(.blue)
-                                    ProgressView(value: viewModel.distanceProgress)
-                                        .tint(.blue)
-                                        .accessibilityLabel("Distance goal progress")
-                                        .accessibilityValue("\(Int(viewModel.distanceProgress * 100)) percent")
-                                    Text("\(Int(viewModel.distanceProgress * 100))%")
-                                        .font(.caption)
-                                        .monospacedDigit()
-                                        .frame(width: 40, alignment: .trailing)
-                                }
                             }
                         }
                         .padding(.horizontal)
                     }
 
-                    if viewModel.selectedTab == .mouse {
-                        mouseMetricsView
-                    } else {
-                        keyboardMetricsView
-                    }
+                    keyboardMetricsView
 
                     Divider()
                         .padding(.horizontal)
@@ -198,7 +176,6 @@ struct MenuBarView: View {
             viewModel.loadChartData()
             dataRefreshTick += 1
             if dataRefreshTick % 10 == 0 {
-                viewModel.loadHeatmapData()
                 viewModel.loadKeyboardData()
                 viewModel.loadHourlySummaries()
                 viewModel.loadAppUsage()
@@ -210,71 +187,24 @@ struct MenuBarView: View {
         }
     }
 
-    private var mouseMetricsView: some View {
+    private var keyboardMetricsView: some View {
         VStack(spacing: 16) {
-            // Distance, Clicks, and Scroll Cards
             LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
-                // Distance Card
+                // Keystrokes Card
                 VStack(alignment: .leading, spacing: 8) {
-                    Image(systemName: "arrow.up.right")
+                    Image(systemName: "keyboard")
                         .font(.title2)
-                        .foregroundStyle(.blue)
+                        .foregroundStyle(.purple)
 
-                    Text(DistanceConverter.formatDistance(viewModel.mouseDistance, unit: preferences.distanceUnit))
+                    Text("\(viewModel.keystrokes)")
                         .font(.title.bold())
 
-                    Text("Distance")
+                    Text("Keystrokes Today")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
                 .accessibilityElement(children: .ignore)
-                .accessibilityLabel("Distance: \(DistanceConverter.formatDistance(viewModel.mouseDistance, unit: preferences.distanceUnit))")
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
-                .padding()
-                .background(Color.secondary.opacity(0.1))
-                .cornerRadius(12)
-
-                // Clicks Card
-                VStack(alignment: .leading, spacing: 8) {
-                    Image(systemName: "cursorarrow.click")
-                        .font(.title2)
-                        .foregroundStyle(.green)
-
-                    Text("\(viewModel.totalClicks)")
-                        .font(.title.bold())
-
-                    Text("Clicks")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-                .accessibilityElement(children: .ignore)
-                .accessibilityLabel("Clicks: \(viewModel.totalClicks)")
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
-                .padding()
-                .background(Color.secondary.opacity(0.1))
-                .cornerRadius(12)
-
-                // Scroll Card
-                VStack(alignment: .leading, spacing: 8) {
-                    Image(systemName: "scroll")
-                        .font(.title2)
-                        .foregroundStyle(.orange)
-
-                    let totalScroll = viewModel.scrollVertical + viewModel.scrollHorizontal
-                    if totalScroll < 1000 {
-                        Text(String(format: "%.0f px", totalScroll))
-                            .font(.title.bold())
-                    } else {
-                        Text(String(format: "%.1f K", totalScroll / 1000))
-                            .font(.title.bold())
-                    }
-
-                    Text("Scroll")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-                .accessibilityElement(children: .ignore)
-                .accessibilityLabel("Scroll: \(String(format: "%.0f pixels", viewModel.scrollVertical + viewModel.scrollHorizontal))")
+                .accessibilityLabel("Keystrokes today: \(viewModel.keystrokes)")
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
                 .padding()
                 .background(Color.secondary.opacity(0.1))
@@ -302,126 +232,6 @@ struct MenuBarView: View {
                 .background(Color.secondary.opacity(0.1))
                 .cornerRadius(12)
             }
-            .padding(.horizontal)
-
-            // Week Overview Chart
-            VStack(alignment: .leading, spacing: 8) {
-                Text("Week Overview")
-                    .font(.headline)
-                    .padding(.horizontal)
-
-                if !viewModel.chartData.isEmpty {
-                    Chart(viewModel.chartData.suffix(7), id: \.date) { item in
-                        let label = viewModel.shortDay(from: item.date)
-                        let distance = viewModel.chartDistance(item.mouseDistancePx, unit: preferences.distanceUnit)
-
-                        LineMark(
-                            x: .value("Day", label),
-                            y: .value("Distance", distance)
-                        )
-                        .foregroundStyle(.blue)
-                        .interpolationMethod(.catmullRom)
-
-                        AreaMark(
-                            x: .value("Day", label),
-                            y: .value("Distance", distance)
-                        )
-                        .foregroundStyle(.blue.opacity(0.1))
-                        .interpolationMethod(.catmullRom)
-
-                        PointMark(
-                            x: .value("Day", label),
-                            y: .value("Distance", distance)
-                        )
-                        .foregroundStyle(.blue)
-                        .symbolSize(30)
-
-                        if hoveredMouseLabel == label {
-                            RuleMark(x: .value("Day", label))
-                                .foregroundStyle(Color.secondary.opacity(0.3))
-                                .annotation(position: .top, spacing: 4) {
-                                    let unit = preferences.distanceUnit == .metric ? "km" : "mi"
-                                    Text(String(format: "%.2f %@", distance, unit))
-                                        .font(.caption)
-                                        .padding(.horizontal, 6)
-                                        .padding(.vertical, 2)
-                                        .background(Color(nsColor: .controlBackgroundColor))
-                                        .cornerRadius(4)
-                                }
-                        }
-                    }
-                    .frame(height: 150)
-                    .chartYAxisLabel(preferences.distanceUnit == .metric ? "km" : "mi")
-                    .chartOverlay { proxy in
-                        GeometryReader { geometry in
-                            Rectangle()
-                                .fill(.clear)
-                                .contentShape(Rectangle())
-                                .onContinuousHover { phase in
-                                    switch phase {
-                                    case .active(let location):
-                                        let origin = geometry[proxy.plotFrame!].origin
-                                        let x = location.x - origin.x
-                                        if let label: String = proxy.value(atX: x) {
-                                            hoveredMouseLabel = label
-                                        }
-                                    case .ended:
-                                        hoveredMouseLabel = nil
-                                    }
-                                }
-                        }
-                    }
-                    .accessibilityElement(children: .ignore)
-                    .accessibilityLabel("Weekly mouse distance chart")
-                    .padding(.horizontal)
-                } else {
-                    Text("Use your Mac for a few days to see trends")
-                        .foregroundStyle(.secondary)
-                        .frame(height: 150)
-                }
-            }
-
-            // Mouse Heatmap
-            VStack(alignment: .leading, spacing: 8) {
-                DisclosureGroup("Mouse Heatmap") {
-                    if viewModel.hasHeatmapData {
-                        HeatmapCanvas(data: viewModel.heatmapData)
-                            .accessibilityElement(children: .ignore)
-                            .accessibilityLabel("Mouse click heatmap showing click distribution")
-                            .frame(height: 200)
-                            .padding(.top, 8)
-                    } else {
-                        Text("Move your mouse to see the heatmap")
-                            .foregroundStyle(.secondary)
-                            .frame(height: 100)
-                    }
-                }
-                .padding(.horizontal)
-            }
-        }
-    }
-
-    private var keyboardMetricsView: some View {
-        VStack(spacing: 16) {
-            // Keystrokes Card
-            VStack(alignment: .leading, spacing: 8) {
-                Image(systemName: "keyboard")
-                    .font(.title2)
-                    .foregroundStyle(.purple)
-
-                Text("\(viewModel.keystrokes)")
-                    .font(.title.bold())
-
-                Text("Keystrokes Today")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-            .accessibilityElement(children: .ignore)
-            .accessibilityLabel("Keystrokes today: \(viewModel.keystrokes)")
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding()
-            .background(Color.secondary.opacity(0.1))
-            .cornerRadius(12)
             .padding(.horizontal)
 
             // Peak Typing Speed Card
@@ -597,77 +407,20 @@ struct MenuBarView: View {
                 .font(.title3.bold())
                 .padding(.horizontal)
 
-            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
-                // Total Distance
-                VStack(alignment: .leading, spacing: 4) {
-                    Label("Distance", systemImage: "point.topleft.down.to.point.bottomright.curvepath")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+            VStack(alignment: .leading, spacing: 4) {
+                Label("Keystrokes", systemImage: "keyboard")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
 
-                    Text(DistanceConverter.formatDistance(viewModel.allTimeDistance, unit: preferences.distanceUnit))
-                        .font(.title2.bold().monospacedDigit())
-                }
-                .accessibilityElement(children: .ignore)
-                .accessibilityLabel("All-time distance: \(DistanceConverter.formatDistance(viewModel.allTimeDistance, unit: preferences.distanceUnit))")
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding()
-                .background(Color.blue.opacity(0.1))
-                .cornerRadius(12)
-
-                // Total Clicks
-                VStack(alignment: .leading, spacing: 4) {
-                    Label("Clicks", systemImage: "cursorarrow.click")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-
-                    Text("\(viewModel.allTimeClicks)")
-                        .font(.title2.bold().monospacedDigit())
-                }
-                .accessibilityElement(children: .ignore)
-                .accessibilityLabel("All-time clicks: \(viewModel.allTimeClicks)")
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding()
-                .background(Color.green.opacity(0.1))
-                .cornerRadius(12)
-
-                // Total Keystrokes
-                VStack(alignment: .leading, spacing: 4) {
-                    Label("Keystrokes", systemImage: "keyboard")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-
-                    Text("\(viewModel.allTimeKeystrokes)")
-                        .font(.title2.bold().monospacedDigit())
-                }
-                .accessibilityElement(children: .ignore)
-                .accessibilityLabel("All-time keystrokes: \(viewModel.allTimeKeystrokes)")
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding()
-                .background(Color.purple.opacity(0.1))
-                .cornerRadius(12)
-
-                // Total Scroll
-                VStack(alignment: .leading, spacing: 4) {
-                    Label("Scroll", systemImage: "scroll")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-
-                    let totalScroll = viewModel.allTimeScrollVertical + viewModel.allTimeScrollHorizontal
-                    if totalScroll < 1000 {
-                        Text(String(format: "%.0f px", totalScroll))
-                            .font(.title2.bold().monospacedDigit())
-                    } else {
-                        Text(String(format: "%.1f K px", totalScroll / 1000))
-                            .font(.title2.bold().monospacedDigit())
-                    }
-                }
-                .accessibilityElement(children: .ignore)
-                .accessibilityLabel("All-time scroll: \(String(format: "%.0f pixels", viewModel.allTimeScrollVertical + viewModel.allTimeScrollHorizontal))")
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding()
-                .background(Color.orange.opacity(0.1))
-                .cornerRadius(12)
+                Text("\(viewModel.allTimeKeystrokes)")
+                    .font(.title2.bold().monospacedDigit())
             }
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("All-time keystrokes: \(viewModel.allTimeKeystrokes)")
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding()
+            .background(Color.purple.opacity(0.1))
+            .cornerRadius(12)
             .padding(.horizontal)
         }
     }

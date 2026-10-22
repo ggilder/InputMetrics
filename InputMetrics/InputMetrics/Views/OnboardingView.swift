@@ -6,14 +6,14 @@ struct OnboardingView: View {
     var onComplete: () -> Void
 
     private let steps: [(icon: String, title: String, description: String)] = [
-        ("cursorarrow.motionlines", "Track Your Input",
-         "InputMetrics runs in your menu bar and tracks mouse movements, clicks, keyboard usage, and scroll activity."),
+        ("keyboard", "Track Your Input",
+         "InputMetrics runs in your menu bar and tracks your keyboard usage."),
         ("lock.shield", "Permissions Required",
-         "All data stays on your device. InputMetrics needs two macOS permissions:\n\n• Accessibility — for mouse tracking\n• Input Monitoring — for keyboard tracking\n\nGrant both in System Settings > Privacy & Security."),
+         "All data stays on your device. InputMetrics needs the Input Monitoring permission to track keyboard usage.\n\nGrant it in System Settings > Privacy & Security."),
         ("chart.bar.xaxis", "View Your Stats",
          "Click the menu bar icon to see today's activity. Open the dashboard for detailed charts and heatmaps."),
         ("gearshape", "Customize",
-         "Configure distance units, data retention, and export your data from Settings.")
+         "Configure data retention and export your data from Settings.")
     ]
 
     var body: some View {
@@ -35,7 +35,7 @@ struct OnboardingView: View {
 
             if currentStep == 1 {
                 Button("Open System Settings") {
-                    if let url = URL(string: "x-apple.systempreferences:com.apple.settings.PrivacySecurity.extension?Privacy_Accessibility") {
+                    if let url = URL(string: "x-apple.systempreferences:com.apple.settings.PrivacySecurity.extension?Privacy_ListenEvent") {
                         NSWorkspace.shared.open(url)
                     }
                 }

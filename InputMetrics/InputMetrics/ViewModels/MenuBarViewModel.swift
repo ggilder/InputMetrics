@@ -4,43 +4,21 @@ import Observation
 @Observable
 @MainActor
 final class MenuBarViewModel {
-    enum MetricTab {
-        case mouse, keyboard
-    }
-
-    var selectedTab: MetricTab = .mouse
-    var mouseDistance: Double = 0
     var keystrokes: Int = 0
-    var leftClicks: Int = 0
-    var rightClicks: Int = 0
-    var middleClicks: Int = 0
     var chartData: [DailySummary] = []
-    var heatmapData: [[Int]] = []
     var keyboardEntries: [KeyboardEntry] = []
     var hourlySummaries: [HourlySummary] = []
     var currentStreak: Int = 0
     var keystrokeProgress: Double = 0
-    var distanceProgress: Double = 0
     var appUsageEntries: [AppUsageEntry] = []
-    var scrollVertical: Double = 0
-    var scrollHorizontal: Double = 0
     var activeMinutes: Int = 0
-    var peakMouseSpeed: Double = 0
     var peakWPM: Double = 0
-    var allTimeDistance: Double = 0
-    var allTimeClicks: Int = 0
     var allTimeKeystrokes: Int = 0
-    var allTimeScrollVertical: Double = 0
-    var allTimeScrollHorizontal: Double = 0
     var firstActiveAt: String?
     var lastActiveAt: String?
-    private var cachedTotals: DatabaseManager.AllTimeTotals = .zero
+    private var cachedKeystrokes: Int = 0
     private var lastCacheTime: Date = .distantPast
     private let cacheInterval: TimeInterval = 30
-
-    var totalClicks: Int {
-        leftClicks + rightClicks + middleClicks
-    }
 
     var formattedActiveTimeRange: String? {
         guard let first = firstActiveAt, let last = lastActiveAt else { return nil }
@@ -87,14 +65,9 @@ final class MenuBarViewModel {
         Array(keyboardEntries.sorted { $0.count > $1.count }.prefix(5))
     }
 
-    var hasHeatmapData: Bool {
-        heatmapData.flatMap { $0 }.contains { $0 > 0 }
-    }
-
     func loadAll() {
         updateStats()
         loadChartData()
-        loadHeatmapData()
         loadKeyboardData()
         loadHourlySummaries()
         loadAppUsage()
@@ -103,36 +76,21 @@ final class MenuBarViewModel {
     }
 
     func updateStats() {
-        let mouseStats = MouseTracker.shared.getCurrentStats()
         let keyboardStats = KeyboardTracker.shared.getCurrentKeystrokes()
         let today = todayString()
 
         let liveActivity = EventMonitor.shared.getActivityTimes()
 
         if let summary = DatabaseManager.shared.getDailySummary(date: today) {
-            mouseDistance = summary.mouseDistancePx + mouseStats.distance
             keystrokes = summary.keystrokes + keyboardStats
-            leftClicks = summary.mouseClicksLeft + mouseStats.left
-            rightClicks = summary.mouseClicksRight + mouseStats.right
-            middleClicks = summary.mouseClicksMiddle + mouseStats.middle
-            scrollVertical = summary.scrollDistanceVertical + mouseStats.scrollV
-            scrollHorizontal = summary.scrollDistanceHorizontal + mouseStats.scrollH
             firstActiveAt = summary.firstActiveAt ?? liveActivity.first
             lastActiveAt = liveActivity.last ?? summary.lastActiveAt
             activeMinutes = summary.activeMinutes
-            peakMouseSpeed = summary.peakMouseSpeed
             peakWPM = summary.peakWPM
         } else {
-            mouseDistance = mouseStats.distance
             keystrokes = keyboardStats
-            leftClicks = mouseStats.left
-            rightClicks = mouseStats.right
-            middleClicks = mouseStats.middle
-            scrollVertical = mouseStats.scrollV
-            scrollHorizontal = mouseStats.scrollH
             firstActiveAt = liveActivity.first
             lastActiveAt = liveActivity.last
-            peakMouseSpeed = 0
             peakWPM = 0
         }
 
@@ -144,7 +102,6 @@ final class MenuBarViewModel {
         guard config.enabled else { return }
 
         keystrokeProgress = min(1.0, Double(keystrokes) / Double(config.keystrokesDaily))
-        distanceProgress = min(1.0, mouseDistance / config.distanceDaily)
 
         calculateStreak(config: config)
     }
@@ -162,10 +119,7 @@ final class MenuBarViewModel {
             let dateStr = formatter.string(from: checkDate)
             guard let summary = DatabaseManager.shared.getDailySummary(date: dateStr) else { break }
 
-            let keystrokesHit = summary.keystrokes >= config.keystrokesDaily
-            let distanceHit = summary.mouseDistancePx >= config.distanceDaily
-
-            if keystrokesHit || distanceHit {
+            if summary.keystrokes >= config.keystrokesDaily {
                 streak += 1
             } else {
                 break
@@ -177,7 +131,7 @@ final class MenuBarViewModel {
     }
 
     func refreshCachedTotals() {
-        cachedTotals = DatabaseManager.shared.getAllTimeTotals()
+        cachedKeystrokes = DatabaseManager.shared.getAllTimeKeystrokes()
         lastCacheTime = Date()
     }
 
@@ -187,12 +141,7 @@ final class MenuBarViewModel {
     }
 
     func updateAllTimeStats() {
-        let mouseStats = MouseTracker.shared.getCurrentStats()
-        allTimeDistance = cachedTotals.distance + mouseStats.distance
-        allTimeClicks = cachedTotals.totalClicks + mouseStats.left + mouseStats.right + mouseStats.middle
-        allTimeKeystrokes = cachedTotals.keystrokes + KeyboardTracker.shared.getCurrentKeystrokes()
-        allTimeScrollVertical = cachedTotals.scrollVertical + mouseStats.scrollV
-        allTimeScrollHorizontal = cachedTotals.scrollHorizontal + mouseStats.scrollH
+        allTimeKeystrokes = cachedKeystrokes + KeyboardTracker.shared.getCurrentKeystrokes()
     }
 
     func loadChartData() {
@@ -210,50 +159,13 @@ final class MenuBarViewModel {
         chartData = DatabaseManager.shared.getDailySummaries(from: startString, to: endString)
 
         let todayStr = formatter.string(from: today)
-        let mouseStats = MouseTracker.shared.getCurrentStats()
         let keyboardStats = KeyboardTracker.shared.getCurrentKeystrokes()
 
         if let idx = chartData.firstIndex(where: { $0.date == todayStr }) {
-            chartData[idx].mouseDistancePx += mouseStats.distance
             chartData[idx].keystrokes += keyboardStats
-            chartData[idx].mouseClicksLeft += mouseStats.left
-            chartData[idx].mouseClicksRight += mouseStats.right
-            chartData[idx].mouseClicksMiddle += mouseStats.middle
-            chartData[idx].scrollDistanceVertical += mouseStats.scrollV
-            chartData[idx].scrollDistanceHorizontal += mouseStats.scrollH
         } else {
-            chartData.append(DailySummary(
-                date: todayStr,
-                mouseDistancePx: mouseStats.distance,
-                mouseClicksLeft: mouseStats.left,
-                mouseClicksRight: mouseStats.right,
-                mouseClicksMiddle: mouseStats.middle,
-                keystrokes: keyboardStats,
-                scrollDistanceVertical: mouseStats.scrollV,
-                scrollDistanceHorizontal: mouseStats.scrollH,
-                firstActiveAt: nil,
-                lastActiveAt: nil
-            ))
+            chartData.append(DailySummary(date: todayStr, keystrokes: keyboardStats))
         }
-    }
-
-    func loadHeatmapData() {
-        let today = todayString()
-        let entries = DatabaseManager.shared.getMouseHeatmap(date: today)
-
-        var grid = Array(repeating: Array(repeating: 0, count: 50), count: 50)
-
-        for entry in entries {
-            guard entry.bucketX >= 0 && entry.bucketY >= 0 && entry.bucketX < 50 && entry.bucketY < 50 else { continue }
-            grid[entry.bucketY][entry.bucketX] += entry.clickCount
-        }
-
-        for (key, count) in MouseTracker.shared.getHeatmapSnapshot() {
-            guard key.bucketX >= 0 && key.bucketY >= 0 && key.bucketX < 50 && key.bucketY < 50 else { continue }
-            grid[key.bucketY][key.bucketX] += count
-        }
-
-        heatmapData = grid
     }
 
     func loadKeyboardData() {
@@ -273,30 +185,18 @@ final class MenuBarViewModel {
         for (bundleId, live) in EventMonitor.shared.getAppUsageSnapshot() {
             if let idx = entries.firstIndex(where: { $0.bundleId == bundleId }) {
                 entries[idx].keystrokes += live.keystrokes
-                entries[idx].mouseClicks += live.clicks
             } else {
                 entries.append(AppUsageEntry(
                     date: today,
                     bundleId: bundleId,
                     appName: live.name,
                     keystrokes: live.keystrokes,
-                    mouseClicks: live.clicks,
                     activeSeconds: 0
                 ))
             }
         }
 
         appUsageEntries = entries.sorted { $0.keystrokes > $1.keystrokes }
-    }
-
-    func chartDistance(_ pixels: Double, unit: DistanceUnit) -> Double {
-        let meters = DistanceConverter.pixelsToMeters(pixels)
-        if unit == .metric {
-            return DistanceConverter.metersToKilometers(meters)
-        } else {
-            let feet = DistanceConverter.metersToFeet(meters)
-            return DistanceConverter.feetToMiles(feet)
-        }
     }
 
     func shortDay(from dateString: String) -> String {

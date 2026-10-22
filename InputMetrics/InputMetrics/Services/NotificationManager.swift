@@ -21,13 +21,13 @@ class NotificationManager {
         return settings.authorizationStatus == .authorized
     }
 
-    func sendDailySummaryNotification(keystrokes: Int, distance: String, clicks: Int) async {
+    func sendDailySummaryNotification(keystrokes: Int) async {
         guard UserPreferences.shared.notificationsEnabled else { return }
         guard await isAuthorized() else { return }
 
         let content = UNMutableNotificationContent()
         content.title = "Daily Summary"
-        content.body = "Today: \(keystrokes) keystrokes, \(distance) distance, \(clicks) clicks"
+        content.body = "Today: \(keystrokes) keystrokes"
         content.sound = .default
 
         let request = UNNotificationRequest(identifier: "daily-summary-\(DateHelper.todayString())", content: content, trigger: nil)
@@ -71,20 +71,11 @@ class NotificationManager {
         guard UserPreferences.shared.notificationsEnabled else { return }
         guard await isAuthorized() else { return }
 
-        let totals = DatabaseManager.shared.getAllTimeTotals()
-        let totalClicks = totals.totalClicks
-        let totalKeystrokes = totals.keystrokes
+        let totalKeystrokes = DatabaseManager.shared.getAllTimeKeystrokes()
 
-        let clickMilestones = [1000, 5000, 10_000, 50_000, 100_000, 500_000, 1_000_000]
         let keystrokeMilestones = [10_000, 50_000, 100_000, 500_000, 1_000_000]
 
-        let lastClickMilestone = UserDefaults.standard.integer(forKey: "lastClickMilestone")
         let lastKeystrokeMilestone = UserDefaults.standard.integer(forKey: "lastKeystrokeMilestone")
-
-        if let milestone = clickMilestones.first(where: { $0 > lastClickMilestone && totalClicks >= $0 }) {
-            await sendMilestoneNotification(title: "Click Milestone!", body: "You've reached \(milestone) total clicks!")
-            UserDefaults.standard.set(milestone, forKey: "lastClickMilestone")
-        }
 
         if let milestone = keystrokeMilestones.first(where: { $0 > lastKeystrokeMilestone && totalKeystrokes >= $0 }) {
             await sendMilestoneNotification(title: "Keystroke Milestone!", body: "You've reached \(milestone) total keystrokes!")

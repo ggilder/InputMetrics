@@ -4,10 +4,10 @@ import Charts
 struct HourlyBreakdownView: View {
     let hourlySummaries: [HourlySummary]
 
-    private var chartEntries: [(hour: Int, keystrokes: Int, clicks: Int)] {
+    private var chartEntries: [(hour: Int, keystrokes: Int)] {
         (0..<24).map { hour in
             let summary = hourlySummaries.first { $0.hour == hour }
-            return (hour: hour, keystrokes: summary?.keystrokes ?? 0, clicks: summary?.mouseClicks ?? 0)
+            return (hour: hour, keystrokes: summary?.keystrokes ?? 0)
         }
     }
 
@@ -24,12 +24,6 @@ struct HourlyBreakdownView: View {
                         y: .value("Keystrokes", entry.keystrokes)
                     )
                     .foregroundStyle(.purple.opacity(0.7))
-
-                    BarMark(
-                        x: .value("Hour", entry.hour),
-                        y: .value("Clicks", entry.clicks)
-                    )
-                    .foregroundStyle(.blue.opacity(0.7))
                 }
                 .chartXAxis {
                     AxisMarks(values: [0, 6, 12, 18, 23]) { value in
@@ -41,7 +35,7 @@ struct HourlyBreakdownView: View {
                     }
                 }
                 .accessibilityElement(children: .ignore)
-                .accessibilityLabel("Hourly breakdown chart showing keystrokes and clicks by hour")
+                .accessibilityLabel("Hourly breakdown chart showing keystrokes by hour")
                 .frame(height: 120)
             }
         }
