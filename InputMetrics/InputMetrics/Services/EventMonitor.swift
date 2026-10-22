@@ -229,10 +229,15 @@ class EventMonitor {
         }
     }
 
+    nonisolated static func isCountedKeystroke(type: CGEventType, isAutoRepeat: Bool) -> Bool {
+        type == .keyDown && !isAutoRepeat
+    }
+
     nonisolated private func handleEvent(type: CGEventType, event: CGEvent) {
         let location = event.location
         let keyCode = Int(event.getIntegerValueField(.keyboardEventKeycode))
         let flags = event.flags
+        let isAutoRepeat = type == .keyDown && event.getIntegerValueField(.keyboardEventAutorepeat) != 0
         let scrollDeltaY = event.getDoubleValueField(.scrollWheelEventPointDeltaAxis1)
         let scrollDeltaX = event.getDoubleValueField(.scrollWheelEventPointDeltaAxis2)
 
@@ -274,8 +279,10 @@ class EventMonitor {
                 MouseTracker.shared.trackClick(type: .middle, at: location)
 
             case .keyDown:
-                keyboardEventCount += 1
-                KeyboardTracker.shared.trackKeystroke(keyCode: keyCode, modifierFlags: flags)
+                if Self.isCountedKeystroke(type: type, isAutoRepeat: isAutoRepeat) {
+                    keyboardEventCount += 1
+                    KeyboardTracker.shared.trackKeystroke(keyCode: keyCode, modifierFlags: flags)
+                }
 
             case .flagsChanged:
                 keyboardEventCount += 1
@@ -299,7 +306,9 @@ class EventMonitor {
 
                 switch type {
                 case .keyDown:
-                    entry.keystrokes += 1
+                    if Self.isCountedKeystroke(type: type, isAutoRepeat: isAutoRepeat) {
+                        entry.keystrokes += 1
+                    }
                 case .leftMouseDown, .rightMouseDown, .otherMouseDown:
                     entry.clicks += 1
                 default:
